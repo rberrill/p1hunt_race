@@ -13,7 +13,8 @@ paths:
   shown at a time. On the phone Control stacks (entrants, then seed and duration, then Start
   race in a sticky, safe-area-padded action bar); mid and desktop put entrants beside a setup
   column. Race and Winner use the full viewport at every width.
-- **The stage is the picture the stream captures.** Nothing covers it except the always-on
+- **The stage is the picture the stream captures.** Nothing covers it except the timing tower at
+  its left (`.tower`, broadcast style, taps pass through; Rich, 2026-11-01), the always-on
   button bar at the bottom and the tap-to-pause overlay (the dimmed, paused stage with the
   controls large), which clears on a button or a tap outside. No gradients.
 - **Operator view = audience view.** There is no separate broadcast layout; every phase is

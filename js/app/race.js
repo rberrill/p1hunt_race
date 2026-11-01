@@ -1,6 +1,6 @@
 // The Race phase: Start race builds the race, a race clock in wall time (playing time only)
 // drives the engine through clockToTicks, and each frame draws a snapshot. Pause and Play, Reset,
-// the hidden-tab pause, the HUD, the live order panel, the button bar, the tap-to-pause overlay,
+// the hidden-tab pause, the HUD, the timing tower, the button bar, the tap-to-pause overlay,
 // the finish hold and the reduced-motion reveal all live here. The frame rate only decides how
 // often the clock is read; a frame's delta never reaches the physics.
 import {
@@ -11,7 +11,7 @@ import {
   raceSnapshot,
   trackLayout,
   finishResult,
-} from '../engine.js?v=0.1.0-dev.9';
+} from '../engine.js?v=0.1.0-dev.10';
 import {
   app,
   byId,
@@ -21,21 +21,37 @@ import {
   announce,
   formatRaceTime,
   phoneMedia,
-} from './core.js?v=0.1.0-dev.9';
-import { initStage, resizeStage, setScene, drawFrame, drawStill } from './stage.js?v=0.1.0-dev.9';
+} from './core.js?v=0.1.0-dev.10';
+import {
+  initStage,
+  resizeStage,
+  setScene,
+  drawFrame,
+  drawStill,
+  carColor,
+} from './stage.js?v=0.1.0-dev.10';
 
-// The live order panel and the HUD text are rewritten at most this often (frame time).
+// The timing tower and the HUD text are rewritten at most this often (frame time).
 const PANEL_INTERVAL_MS = 100;
 // The leader is announced to the live region at most this often.
 const ANNOUNCE_INTERVAL_MS = 2000;
 // The lights stay on screen this long after going out (shell time).
 const LIGHTS_LINGER_MS = 600;
+// The tower's live gap is the rough translation of distance to time Rich asked for
+// (2026-11-01): the distance to the leader divided by the trailing car's own speed, floored
+// at this (a track unit is one second at cruise, 1.0) so the launch never shows a huge gap.
+// Once both cars have crossed, the gap is the exact difference of their times.
+const GAP_SPEED_FLOOR = 0.5;
+// The tower's rows: place, swatch, name, gap.
+const ROW_SWATCH = 1;
+const ROW_NAME = 2;
+const ROW_GAP = 3;
 
 let onRaceFinished = null;
 let frameHandle = 0;
 let panelDueMs = 0;
 let announceDueMs = 0;
-let orderItems = [];
+let towerRows = [];
 let lastOrder = null;
 let revealedPlaces = 0;
 let lastDrawMs = 0;
@@ -64,7 +80,7 @@ export function initRace(options) {
   document.addEventListener('visibilitychange', onVisibilityChange);
   document.addEventListener('keydown', onKeyDown);
   new ResizeObserver(onStageResize).observe(byId('stageWrap'));
-  phoneMedia.addEventListener('change', fitOrderPanel);
+  phoneMedia.addEventListener('change', fitTower);
 }
 
 /**
@@ -88,10 +104,9 @@ export function startRace(inputs) {
   });
   app.finishedAtClockMs = null;
   setScene(trackLayout(app.race), app.race.displayNames, app.config);
-  buildOrderPanel();
+  buildTower();
   setText('hudSeed', app.race.seed);
   setText('hudElapsed', formatRaceTime(0, 1));
-  setText('hudLeader', '—');
   showPhase('race');
   onStageResize();
   if (app.isReducedMotion) {
@@ -267,7 +282,7 @@ function onFrame(frameTimeMs) {
 
 /**
  * drawCurrentFrame(frameTimeMs, tickFraction, clockMs) → the snapshot drawn with the lights
- * state, then the HUD and the panel at their own pace.
+ * state, then the HUD and the tower at their own pace.
  */
 function drawCurrentFrame(frameTimeMs, tickFraction = 0, clockMs = raceClockMs(frameTimeMs)) {
   const snapshot = raceSnapshot(app.race, tickFraction);
@@ -277,7 +292,7 @@ function drawCurrentFrame(frameTimeMs, tickFraction = 0, clockMs = raceClockMs(f
   if (frameTimeMs >= panelDueMs) {
     panelDueMs = frameTimeMs + PANEL_INTERVAL_MS;
     updateHud(snapshot, frameTimeMs);
-    updateOrderPanel(snapshot);
+    updateTower(snapshot);
   }
 }
 
@@ -295,17 +310,13 @@ function lightsLit(clockMs) {
 }
 
 /**
- * updateHud(snapshot, frameTimeMs) → elapsed race time and the leader; the leader is announced
- * to the live region now and then.
+ * updateHud(snapshot, frameTimeMs) → elapsed race time; the leader is announced to the live
+ * region now and then (the tower's first row shows it).
  */
 function updateHud(snapshot, frameTimeMs) {
   setText('hudElapsed', formatRaceTime(snapshot.elapsedSec, 1));
+  if (snapshot.tick === 0) return;
   const leaderName = app.race.displayNames[snapshot.leader];
-  if (snapshot.tick === 0) {
-    setText('hudLeader', '—');
-    return;
-  }
-  setText('hudLeader', leaderName);
   if (frameTimeMs >= announceDueMs) {
     announceDueMs = frameTimeMs + ANNOUNCE_INTERVAL_MS;
     announce(`Leader ${leaderName}`);
@@ -323,76 +334,102 @@ function onFinishReached(clockMs) {
 }
 
 /**
- * buildOrderPanel() → one list item per car, reused for the whole race.
+ * buildTower() → one row per place, reused for the whole race: place, a swatch in the car's
+ * color, the name and the gap to the leader.
  */
-function buildOrderPanel() {
-  orderItems = [];
+function buildTower() {
+  towerRows = [];
   for (let i = 0; i < app.race.carCount; i++) {
-    orderItems.push(makeEl('li', null,
+    towerRows.push(makeEl('li', null,
       makeEl('span', { class: 'place' }, String(i + 1)),
+      makeEl('span', { class: 'swatch' }, ''),
       makeEl('span', { class: 'name' }, ''),
-      makeEl('span', { class: 'time' }, '')));
+      makeEl('span', { class: 'gap' }, '')));
   }
-  byId('liveOrder').replaceChildren(...orderItems);
+  byId('towerRows').replaceChildren(...towerRows);
   lastOrder = new Int32Array(app.race.carCount).fill(-1);
-  fitOrderPanel();
+  fitTower();
 }
 
 /**
- * updateOrderPanel(snapshot) → rewrites the items whose car changed; the leader is marked.
+ * setTowerRow(i, car, gapText, isLeader) → row i shows `car` (name and swatch rewritten only
+ * when the car in that place changed) with the gap text; the leader row carries the accent.
  */
-function updateOrderPanel(snapshot) {
-  const { order } = snapshot;
-  for (let i = 0; i < orderItems.length; i++) {
+function setTowerRow(i, car, gapText, isLeader) {
+  const row = towerRows[i];
+  if (lastOrder[i] !== car) {
+    lastOrder[i] = car;
+    row.children[ROW_NAME].textContent = car < 0 ? '—' : app.race.displayNames[car];
+    row.children[ROW_SWATCH].style.backgroundColor = car < 0 ? 'transparent' : carColor(car);
+  }
+  if (row.children[ROW_GAP].textContent !== gapText) row.children[ROW_GAP].textContent = gapText;
+  row.classList.toggle('is-leader', isLeader);
+}
+
+/**
+ * finishedGapText(car, winner) → the gap column once a car has crossed: the winner's own time,
+ * the others' exact gap to the winner.
+ */
+function finishedGapText(car, winner) {
+  const tickSec = 1 / app.config.ticksPerSecond;
+  if (car === winner) return formatRaceTime(app.race.finishTick[car] * tickSec, 1);
+  return `+${((app.race.finishTick[car] - app.race.finishTick[winner]) * tickSec).toFixed(1)}`;
+}
+
+/**
+ * updateTower(snapshot) → every row follows the live order. The gap is blank before lights out
+ * and on the leader's row; a running car shows its distance to the leader divided by its own
+ * speed; a crossed car its exact gap to the winner (the winner, its time).
+ */
+function updateTower(snapshot) {
+  const { order, leader } = snapshot;
+  const isStarted = snapshot.tick > 0;
+  const winner = app.race.finishOrder[0];
+  for (let i = 0; i < towerRows.length; i++) {
     const car = order[i];
-    const isCrossed = app.race.place[car] > 0;
-    const timeText = isCrossed
-      ? formatRaceTime(app.race.finishTick[car] / app.config.ticksPerSecond, 3)
-      : '';
-    const item = orderItems[i];
-    if (lastOrder[i] !== car) {
-      item.children[1].textContent = app.race.displayNames[car];
-      lastOrder[i] = car;
+    let gapText = '';
+    if (isStarted && app.race.place[car] > 0) {
+      gapText = finishedGapText(car, winner);
+    } else if (isStarted && i > 0) {
+      const speed = Math.max(GAP_SPEED_FLOOR, snapshot.speed[car]);
+      const gapSec = (snapshot.distance[leader] - snapshot.distance[car]) / speed;
+      gapText = `+${Math.max(0, gapSec).toFixed(1)}`;
     }
-    if (item.children[2].textContent !== timeText) item.children[2].textContent = timeText;
-    item.classList.toggle('is-leader', i === 0 && snapshot.tick > 0);
+    setTowerRow(i, car, gapText, i === 0 && isStarted);
   }
 }
 
 /**
- * fitOrderPanel() → shows as many places as fit the panel (a column on desktop, a row on mid
- * and phone), hiding from the end until nothing overflows, then "+ n more".
+ * fitTower() → shows as many places as fit the tower's height, towerMaxRows at most, hiding
+ * from the end until nothing overflows, then "+ n more".
  */
-function fitOrderPanel() {
-  if (!orderItems.length) return;
-  const panel = byId('orderPanel');
-  const list = byId('liveOrder');
-  const more = byId('orderMore');
-  for (const item of orderItems) item.hidden = false;
-  more.hidden = true;
-  let visible = orderItems.length;
-  // The list clips its own items, so its scroll size is what overflows, then the panel's.
-  const overflows = () => list.scrollHeight > list.clientHeight + 1
-    || list.scrollWidth > list.clientWidth + 1
-    || panel.scrollHeight > panel.clientHeight + 1
-    || panel.scrollWidth > panel.clientWidth + 1;
-  while (visible > 1 && overflows()) {
+function fitTower() {
+  if (!towerRows.length) return;
+  const tower = byId('tower');
+  const more = byId('towerMore');
+  let visible = Math.min(towerRows.length, app.config.towerMaxRows);
+  for (let i = 0; i < towerRows.length; i++) towerRows[i].hidden = i >= visible;
+  const showMore = () => {
+    more.hidden = visible >= towerRows.length;
+    more.textContent = `+ ${towerRows.length - visible} more`;
+  };
+  showMore();
+  while (visible > 1 && tower.scrollHeight > tower.clientHeight + 1) {
     visible--;
-    orderItems[visible].hidden = true;
-    more.hidden = false;
-    more.textContent = `+ ${orderItems.length - visible} more`;
+    towerRows[visible].hidden = true;
+    showMore();
   }
 }
 
 /**
- * onStageResize() → the canvas follows its box; the panel refits; a paused or still frame is
+ * onStageResize() → the canvas follows its box; the tower refits; a paused or still frame is
  * redrawn so a resize never leaves a stale picture.
  */
 function onStageResize() {
   if (app.phase !== 'race') return;
   const box = byId('stageWrap').getBoundingClientRect();
   resizeStage(box.width, box.height);
-  fitOrderPanel();
+  fitTower();
   if (!app.race) return;
   if (app.isReducedMotion) {
     drawStill();
@@ -422,9 +459,10 @@ function hideOverlay() {
 }
 
 /**
- * advanceReveal(clockMs, frameTimeMs) → the reduced-motion reveal: the order panel fills from
- * last place up to first over revealSec, so the winner comes last; then the finish hold runs
- * as usual. The HUD shows the winner's time once revealed.
+ * advanceReveal(clockMs, frameTimeMs) → the reduced-motion reveal: the tower fills from last
+ * place up to first over revealSec, so the winner comes last (with a big field only the last
+ * reveals are in the visible rows); then the finish hold runs as usual. The HUD shows the
+ * winner's time once revealed.
  */
 function advanceReveal(clockMs, frameTimeMs) {
   const total = app.race.carCount;
@@ -447,19 +485,14 @@ function advanceReveal(clockMs, frameTimeMs) {
 function renderReveal(revealedCount) {
   const total = app.race.carCount;
   const firstShown = total - revealedCount;
-  for (let i = 0; i < orderItems.length; i++) {
-    const item = orderItems[i];
+  const winner = app.race.finishOrder[0];
+  for (let i = 0; i < towerRows.length; i++) {
     const car = app.race.finishOrder[i];
     const isShown = i >= firstShown;
-    item.children[1].textContent = isShown ? app.race.displayNames[car] : '—';
-    item.children[2].textContent = isShown
-      ? formatRaceTime(app.race.finishTick[car] / app.config.ticksPerSecond, 3)
-      : '';
-    item.classList.toggle('is-leader', i === 0 && isShown);
+    const gapText = isShown ? finishedGapText(car, winner) : '';
+    setTowerRow(i, isShown ? car : -1, gapText, i === 0 && isShown);
   }
   const isWinnerShown = firstShown === 0;
-  const winner = app.race.finishOrder[0];
-  setText('hudLeader', isWinnerShown ? app.race.displayNames[winner] : '—');
   setText('hudElapsed', isWinnerShown
     ? formatRaceTime(app.race.finishTick[winner] / app.config.ticksPerSecond, 1)
     : formatRaceTime(0, 1));

@@ -558,6 +558,13 @@ function drawLights(litCount) {
 /* ==== FRAME ==== */
 
 /**
+ * carColor(car) → the color the stage draws car `car` in, for the tower's swatches.
+ */
+export function carColor(car) {
+  return scene.colors[car];
+}
+
+/**
  * drawFrame(snapshot, options) → one frame: { frameDeltaSec, lightsLit } where lightsLit is
  * -1 for no lights, else how many of the three are red.
  */

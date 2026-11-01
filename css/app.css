@@ -371,61 +371,71 @@ input[type="range"] {
   flex-direction: column;
   min-height: 0;
 }
-.order-panel {
-  flex: none;
+/* The timing tower: the live order over the left of the stage, broadcast style, the one
+   permanent overlay on the stage (Rich, 2026-11-01). Taps pass through it to the stage. */
+.tower {
+  position: absolute;
+  top: 10px;
+  bottom: 10px;
+  left: 10px;
   display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  background: var(--panel);
-  border-bottom: 1px solid var(--line);
+  flex-direction: column;
+  gap: 2px;
+  width: 250px;
+  max-width: 32%;
   overflow: hidden;
-  white-space: nowrap;
+  pointer-events: none;
 }
-.order-panel h2 {
-  flex: none;
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-.leader-chip {
-  flex: none;
-  padding: 6px 10px;
-  border: 1px solid var(--accent);
-  border-radius: 8px;
-  font-size: 13px;
-}
-.leader-chip b { color: var(--accent); }
-.order-list {
-  flex: 1 1 auto;
+.tower-rows {
   display: flex;
-  gap: 6px;
-  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
   padding: 0;
   list-style: none;
-  overflow: hidden;
 }
-.order-list li {
-  flex: none;
+.tower-rows li {
   display: flex;
   align-items: center;
-  gap: 6px;
-  min-height: 34px;
-  padding: 0 10px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--bg);
+  gap: 8px;
+  height: 30px;
+  padding: 0 8px 0 6px;
+  border-left: 3px solid transparent;
+  background: rgba(22, 22, 24, 0.78);
   font-size: 14px;
+  white-space: nowrap;
 }
-.order-list .place { color: var(--muted); font-size: 12px; }
-.order-list .name { font-weight: 600; }
-.order-list .time { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
-.order-list .time:empty { display: none; }
-.order-list .is-leader { border-color: var(--accent); background: rgba(229, 50, 45, 0.14); }
-.order-list .is-leader .place { color: var(--accent); font-weight: 800; }
-.order-more { flex: none; color: var(--muted); font-size: 13px; }
+.tower-rows .place {
+  flex: none;
+  width: 1.6em;
+  color: var(--muted);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.tower-rows .swatch { flex: none; width: 6px; height: 18px; border-radius: 1px; }
+.tower-rows .name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 600;
+}
+.tower-rows .gap {
+  flex: none;
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.tower-rows .is-leader { border-left-color: var(--accent); background: rgba(22, 22, 24, 0.9); }
+.tower-rows .is-leader .place { color: var(--accent); }
+.tower-more {
+  margin: 0;
+  padding: 3px 8px 3px 9px;
+  background: rgba(22, 22, 24, 0.78);
+  color: var(--muted);
+  font-size: 12px;
+}
 .stage-wrap {
   position: relative;
   flex: 1 1 auto;
@@ -579,26 +589,6 @@ input[type="range"] {
   }
   .grid-panel .grid-list { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .control-actions { align-self: end; }
-  /* The live order panel becomes a column beside the stage. */
-  .race-body { flex-direction: row; }
-  .order-panel {
-    flex-direction: column;
-    align-items: stretch;
-    width: 260px;
-    padding: 12px;
-    border-bottom: 0;
-    border-right: 1px solid var(--line);
-    white-space: normal;
-  }
-  .order-list { flex-direction: column; overflow: hidden; }
-  .order-list li { min-height: 40px; }
-  .order-list .name {
-    flex: 1 1 auto;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
   .winner-grid {
     grid-template-columns: minmax(0, 3fr) minmax(320px, 2fr);
     grid-template-rows: auto auto minmax(0, 1fr);
@@ -640,10 +630,10 @@ input[type="range"] {
   .hud-elapsed { font-size: 24px; }
   .hud-seed { font-size: 12px; }
   .race-bar .badge { display: none; }
-  .order-panel { padding: 6px 10px; gap: 6px; }
-  .order-panel h2 { display: none; }
-  .leader-chip { font-size: 12px; padding: 6px 8px; }
-  .order-list li { min-height: 32px; padding: 0 8px; font-size: 13px; }
+  .tower { top: 8px; bottom: 8px; left: 8px; width: 150px; max-width: 36%; }
+  .tower-rows li { gap: 6px; height: 26px; padding: 0 6px 0 4px; font-size: 13px; }
+  .tower-rows .swatch { height: 16px; }
+  .tower-rows .gap { font-size: 11px; }
   .button-bar .btn { flex: 1 1 0; }
   /* The phone scrolls the Winner page; no row is squeezed. */
   .winner-grid {
