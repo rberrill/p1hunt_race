@@ -66,6 +66,10 @@ const FINISH_CHECKS = 12;
 const LIGHT_COUNT = 3;
 const LIGHT_DIAMETER_FRACTION = 0.07;
 const LIGHT_MAX_DIAMETER_PX = 56;
+// The lights sit this far above the start-line cars' labels (Rich, 2026-11-01: close to the
+// cars, near the centre of the screen), and at least this far from the stage's top edge.
+const LIGHT_CLEARANCE_PX = 76;
+const LIGHT_TOP_MARGIN_PX = 8;
 // The device pixel ratio is capped so a 3× phone doesn't draw nine times the pixels.
 const MAX_PIXEL_RATIO = 2;
 // Camera smoothing: the share of the remaining distance covered per second of frame time.
@@ -534,18 +538,29 @@ function drawCars(snapshot) {
 /* ==== LIGHTS ==== */
 
 /**
- * drawLights(litCount) → the start lights over the road: three discs, `litCount` of them red.
- * Drawn while the countdown runs and for a moment after they go out.
+ * drawLights(litCount, clearLeftPx) → the start lights over the road: three discs, `litCount`
+ * of them red, drawn while the countdown runs and for a moment after they go out. The box sits
+ * just above the cars on the start line (where the camera's look-back puts them at tick 0),
+ * centred on the stage, or pushed right as far as it takes to clear `clearLeftPx` (the timing
+ * tower's edge) so the two never overlap (Rich, 2026-11-01).
  */
-function drawLights(litCount) {
+function drawLights(litCount, clearLeftPx) {
   const { ctx } = view;
   const diameter = Math.min(LIGHT_MAX_DIAMETER_PX, view.width * LIGHT_DIAMETER_FRACTION);
   const gap = diameter * 0.5;
   const totalWidth = LIGHT_COUNT * diameter + (LIGHT_COUNT - 1) * gap;
-  const left = (view.width - totalWidth) / 2;
-  const top = horizonY() * 0.25;
+  const centredLeft = (view.width - totalWidth) / 2;
+  const clearLeft = clearLeftPx + gap * 2;
+  const left = Math.min(view.width - totalWidth - gap, Math.max(centredLeft, clearLeft));
+  const startScale = Math.min(1, scene.config.cameraNearUnits / scene.config.lookBackUnits);
+  const carHeightPx = roadHalfWidthNearPx() * 2 * CAR_WIDTH_FRACTION * startScale
+    * CAR_HEIGHT_RATIO;
+  const boxHeight = diameter + gap;
+  const boxBottom = screenYAt(startScale) - carHeightPx - LIGHT_CLEARANCE_PX;
+  const boxTop = Math.max(LIGHT_TOP_MARGIN_PX, boxBottom - boxHeight);
+  const top = boxTop + gap / 2;
   ctx.fillStyle = COLOR_TYRE;
-  ctx.fillRect(left - gap, top - gap / 2, totalWidth + gap * 2, diameter + gap);
+  ctx.fillRect(left - gap, boxTop, totalWidth + gap * 2, boxHeight);
   for (let i = 0; i < LIGHT_COUNT; i++) {
     ctx.fillStyle = i < litCount ? COLOR_LIGHT_ON : COLOR_LIGHT_OFF;
     ctx.beginPath();
@@ -565,8 +580,9 @@ export function carColor(car) {
 }
 
 /**
- * drawFrame(snapshot, options) → one frame: { frameDeltaSec, lightsLit } where lightsLit is
- * -1 for no lights, else how many of the three are red.
+ * drawFrame(snapshot, options) → one frame: { frameDeltaSec, lightsLit, lightsClearPx } where
+ * lightsLit is -1 for no lights, else how many of the three are red, and lightsClearPx is the
+ * stage width the lights must keep clear of at the left (the tower).
  */
 export function drawFrame(snapshot, options) {
   const { ctx } = view;
@@ -577,7 +593,7 @@ export function drawFrame(snapshot, options) {
   drawRoad();
   drawFinishLine();
   drawCars(snapshot);
-  if (options.lightsLit >= 0) drawLights(options.lightsLit);
+  if (options.lightsLit >= 0) drawLights(options.lightsLit, options.lightsClearPx || 0);
 }
 
 /**

@@ -362,8 +362,9 @@ input[type="range"] {
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
-.hud-seed { color: var(--muted); font-size: 13px; white-space: nowrap; }
-.hud-seed b { color: var(--text); font: 700 14px ui-monospace, Menlo, Consolas, monospace; }
+/* The seed sits small beside the P1 mark (Rich, 2026-11-01), not with the HUD. */
+.hud-seed { margin-left: -4px; color: var(--muted); font-size: 11px; white-space: nowrap; }
+.hud-seed b { color: var(--text); font: 700 12px ui-monospace, Menlo, Consolas, monospace; }
 .race-bar .badge { margin-left: 0; }
 .race-body {
   flex: 1 1 auto;
@@ -654,7 +655,8 @@ input[type="range"] {
   .race-bar .brand { font-size: 0; }
   .race-bar .brand .mark { font-size: 12px; }
   .hud-elapsed { font-size: 24px; }
-  .hud-seed { font-size: 12px; }
+  .hud-seed { margin-left: 0; font-size: 10px; }
+  .hud-seed b { font-size: 11px; }
   .race-bar .badge { display: none; }
   /* Wider on the phone so a half-width minor row still has room for a name. */
   .tower { top: 8px; bottom: 8px; left: 8px; width: 160px; max-width: 42%; }

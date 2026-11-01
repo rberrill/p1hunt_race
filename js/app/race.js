@@ -11,7 +11,7 @@ import {
   raceSnapshot,
   trackLayout,
   finishResult,
-} from '../engine.js?v=0.1.0-dev.13';
+} from '../engine.js?v=0.1.0-dev.14';
 import {
   app,
   byId,
@@ -21,7 +21,7 @@ import {
   announce,
   formatRaceTime,
   phoneMedia,
-} from './core.js?v=0.1.0-dev.13';
+} from './core.js?v=0.1.0-dev.14';
 import {
   initStage,
   resizeStage,
@@ -29,7 +29,7 @@ import {
   drawFrame,
   drawStill,
   carColor,
-} from './stage.js?v=0.1.0-dev.13';
+} from './stage.js?v=0.1.0-dev.14';
 
 // The timing tower and the HUD text are rewritten at most this often (frame time).
 const PANEL_INTERVAL_MS = 100;
@@ -294,7 +294,12 @@ function drawCurrentFrame(frameTimeMs, tickFraction = 0, clockMs = raceClockMs(f
   const snapshot = raceSnapshot(app.race, tickFraction);
   const frameDeltaSec = Math.min(0.1, Math.max(0, (frameTimeMs - lastDrawMs) / 1000));
   lastDrawMs = frameTimeMs;
-  drawFrame(snapshot, { frameDeltaSec, lightsLit: lightsLit(clockMs) });
+  const lit = lightsLit(clockMs);
+  drawFrame(snapshot, {
+    frameDeltaSec,
+    lightsLit: lit,
+    lightsClearPx: lit >= 0 ? towerRightPx() : 0,
+  });
   if (frameTimeMs >= panelDueMs) {
     panelDueMs = frameTimeMs + PANEL_INTERVAL_MS;
     updateHud(snapshot, frameTimeMs);
@@ -303,6 +308,16 @@ function drawCurrentFrame(frameTimeMs, tickFraction = 0, clockMs = raceClockMs(f
     towerDueMs = frameTimeMs + app.config.towerRefreshMs;
     updateTower(snapshot);
   }
+}
+
+/**
+ * towerRightPx() → how far the timing tower reaches into the stage from its left edge, so the
+ * lights can keep clear of it.
+ */
+function towerRightPx() {
+  const tower = byId('tower').getBoundingClientRect();
+  const wrap = byId('stageWrap').getBoundingClientRect();
+  return Math.max(0, tower.right - wrap.left);
 }
 
 /**
