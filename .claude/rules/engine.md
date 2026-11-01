@@ -6,9 +6,9 @@ paths:
 # Engine rules (`js/engine.js`)
 
 The engine is the race: it turns entrants, a seed and a duration into a finish order and the
-positions to draw along the way. This file sets its boundary; its design (fixed timestep,
-approximate duration, the tail of the field) is the engine session's job, from the definition's
-"Engine session: starting questions".
+positions to draw along the way. This file sets its boundary and records the design decided
+with Rich on 2026-11-01 (the detail is in `archive/P1 Hunt Race — Engine Proposal.md` and the
+decision log).
 
 - **Pure and deterministic** (from the definition: same entrants, duration and seed always
   give the same result, so a race can be re-run on stream). The engine is pure functions over
@@ -29,3 +29,32 @@ approximate duration, the tail of the field) is the engine session's job, from t
   the app (`?selftest=1`). Add a one-line row for it under "Engine self-tests" in
   `tests/README.md` if it opens a new area.
 - Every tunable lives in `CONFIG` (`js/config.js`), never as a literal here.
+- **Only exactly rounded arithmetic:** `+ - * /`, `Math.floor`, `min`, `max`, `abs`, `imul` and
+  shifts. Never `Math.sin`, `exp`, `log`, `pow` or `**` (selftest checks): the spec lets engines
+  round those differently, and one bit can change a photo finish. Curves are piecewise linear;
+  anything measured (the nominal car's time) is measured by simulating, not by a formula.
+
+## The design (decided 2026-11-01)
+
+- **Race time:** `CONFIG.ticksPerSecond` (60) ticks per second. `advanceTick(race)` is one tick,
+  in place; the shell calls it once per elapsed tick, however many a frame covers. Pause is
+  not ticking; Reset is `createRace` again. `runToFinish` is the reduced-motion mode's and the
+  tests' way to the end.
+- **Randomness:** xoshiro128** seeded from FNV-1a of `seedText + ':' + purpose` through the
+  MurmurHash3 finalizer; one stream per purpose (`track`, `lanes`, `car:<index>`), so a change
+  to one part's draws never shifts another's. Cars are keyed by list index, not name.
+- **Track (Rich):** 2 to 3 turns per 10 s of duration; 1 to 3 long straights among short
+  ones (never more than half, Claude's call); each turn a seeded direction and apex speed with
+  fixed braking and exit zones. The straights scale so the nominal car (every factor 1.0)
+  crosses at the duration to within a tick; the finish line is where that car is at the last
+  tick.
+- **Cars:** a standing start; per car a base pace, a launch factor, checkpoints along each
+  straight and a corner factor per turn, each a spread around 1.0 from `CONFIG`. Speed moves
+  toward target × factor by at most the acceleration or braking rate per tick.
+- **Finish (Rich):** every car crosses; the crossing time is the tick plus a linear sub-tick
+  fraction; a dead heat goes to the car's seeded tiebreak, then list order. `maxRaceSec` is
+  only a guard. Times are kept to the millisecond.
+- **Hot loop:** `moveCars` allocates nothing; the state is typed arrays; `raceSnapshot` refills
+  one object per race. Measured: about 4 µs per tick with 100 cars in Node.
+- **Overrides:** `sanitizeOverrides` applies only `CONFIG_LIMITS` keys, numbers within range;
+  the applied set is carried in the race record and both exports.

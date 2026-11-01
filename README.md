@@ -11,7 +11,7 @@ It's made for breakers running a live stream: share the browser window from a co
 Three screens in a loop:
 
 1. **Control.** The entrant list (typed one per line, or imported from a CSV using the template the app offers), the seed and the race duration, on one page the audience can read. **Start race** hands the screen to the race.
-2. **Race.** A vertical road in a retro arcade style, cars seen from behind, racing toward the finish, with the live order shown alongside. Pause and Reset stay out of the picture. It's a simulated race decided by the seed, not a reveal of a result picked in advance.
+2. **Race.** A vertical road in a retro arcade style, cars seen from behind, racing toward the finish, with the live order shown alongside. Pause and Reset stay out of the picture. It's a simulated race decided by the seed, not a reveal of a result picked in advance: the track is laid out from the seed and the duration, every car runs the same rules, and every car crosses the line, so every place has a real time.
 3. **Winner.** The winner, large, and the full finishing order, with CSV and JSON export. **Re-run** plays the identical race again; **Start over** goes back to the list with a fresh seed.
 
 Everything stays in your browser: no accounts, no server, no uploads, no analytics. See [SECURITY.md](SECURITY.md) for what's stored on your device.

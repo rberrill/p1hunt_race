@@ -4,7 +4,7 @@ A free browser tool that picks a giveaway winner by running an F1-style race on 
 
 - **Who uses it:** a breaker on a Whatnot stream, sharing a browser window from a **second device**: a computer running OBS, or a second phone in portrait. Never the streaming phone. The operator's screen is the audience's screen, so every phase has to look good on stream.
 - **What they need, in order:** viewers can read and trust the entrant list; the race reads clearly on a phone-sized stream; the winner is unmistakable; re-running a contested race takes seconds.
-- **Versions:** this is a fresh project. It starts at 0.1.0 and aims at a 1.0.0 public release; nothing from the v2 folder (`../p1hunt-race/`, reference only) was ever released.
+- **Versions:** this is a fresh project. It starts at 0.1.0 and aims at a 1.0.0 public release; nothing from the v2 folder (`../archived/p1hunt-race/`, reference only) was ever released.
 
 ## How we work
 
@@ -50,12 +50,17 @@ All from the product definition, decided with Rich on 2026-11-01 unless marked o
 - **Breakpoints:** phone up to 760 px (`max-width: 760px`, the Finisher's line), mid 761 to 1100, desktop above 1100. Control stacks on the phone and puts entrants beside a setup column above it; Race and Winner use the full viewport at every width.
 - **Accessibility:** an ARIA live region and a `prefers-reduced-motion` race mode that produces the same result (kept from v2; the mode is designed with the new format).
 - **Versioning:** SemVer by user-visible change, from 0.1.0 toward 1.0.0. Process and tooling changes don't bump the major.
+- **Race time** (engine session, 2026-11-01): 60 ticks per second; a frame only decides how many ticks run. Seeded by xoshiro128** from FNV-1a of the seed text, one stream per purpose; the engine uses only exactly rounded arithmetic (no `sin`, `exp`, `pow`, `log`), so the finish is identical on every device (Claude's technique for the definition's requirement). Results are reproducible within an app version; the record carries the version.
+- **The track comes from the seed and the duration** (Rich, 2026-11-01): 2 to 3 turns per 10 s of duration, a mix of short straights and 1 to 3 long ones, each turn's direction and apex speed seeded, so every seed-and-list pair is its own race, Pole Position style. The straights scale so a nominal car crosses at the duration; the winner lands a little early (measured 94–99 % of the duration from 24 cars up) and the last car a little late (up to 107 %). **Default duration 30 s.**
+- **The tail: hold the line** (Rich, 2026-11-01, over Claude's cut-with-grace lean). Every car crosses; every place is a real crossing with a time; the Winner screen comes after the last car.
+- **Result-affecting tunables are link-overridable** within `CONFIG_LIMITS`, and every override in effect goes into the race record and both exports, so a tweaked link can't pose as a stock race (Claude's call, put to Rich 2026-11-01 without objection). `ticksPerSecond` is not overridable.
+- **Reduced motion is a shell drawing policy**, not an engine mode: the shell runs the race with `runToFinish` and reveals the finish without motion; the engine's result is the same by construction (Claude's call).
 
 ## Map
 
 | Where | What |
 |---|---|
-| `index.html`, `css/`, `js/` | The app (not started; the engine session comes first). Rules for each load from `.claude/rules/` when you open the files |
+| `index.html`, `css/`, `js/` | The app. `js/config.js` (every tunable) and `js/engine.js` (the race) exist; `index.html`, `css/` and `js/app/` come with the Control phase and the stage. Rules for each load from `.claude/rules/` when you open the files |
 | `tests/README.md` | How to run the tests and what each guards |
 | `.claude/skills/` | `verify` (end-to-end checks), `uat` (Rich's acceptance script), `release` (Rich-triggered) |
 | `.claude/hooks/` | SessionStart: project state. Stop: runs selftest when app code changed |

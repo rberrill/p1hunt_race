@@ -27,5 +27,8 @@ paths:
 
 ## Where things are
 
-Not written yet. When the modules exist, list each one here with what it owns (as the
-Finisher's `shell-modules.md` does), and keep the list current.
+- `js/config.js`: `CONFIG` (every tunable, `appVersion`, `storageKey`) and `CONFIG_LIMITS` (the
+  link-overridable keys with their ranges).
+
+`js/app/` is not written yet. When the modules exist, list each one here with what it owns (as
+the Finisher's `shell-modules.md` does), and keep the list current.

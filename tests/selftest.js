@@ -248,6 +248,18 @@ if (!exists('js/engine.js')) {
   const found = [...engine.matchAll(FORBIDDEN)].map(match => match[0]);
   report(!found.length, 'Engine: no window, document, storage, clock, frame loop or Math.random',
     found.length ? [...new Set(found)].join(', ') : 'clean');
+  // The spec lets engines round these differently in the last bit, and one bit can change a
+  // photo finish: the engine keeps to + - * /, floor, min, max, imul and shifts. Comments are
+  // stripped first (the generator's name has two stars in it).
+  const engineCode = engine.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+  const ROUNDING_VARIES = new RegExp(
+    '\\bMath\\.(?:sin|cos|tan|asin|acos|atan|atan2|sinh|cosh|tanh|exp|expm1|log|log2|log10'
+    + '|log1p|pow|cbrt|hypot)\\b|\\*\\*',
+    'g',
+  );
+  const varying = [...engineCode.matchAll(ROUNDING_VARIES)].map(match => match[0]);
+  report(!varying.length, 'Engine: no Math functions that engines may round differently',
+    varying.length ? [...new Set(varying)].join(', ') : 'only exactly rounded arithmetic');
   const outside = staticImports(engine)
     .map(entry => entry.specifier.split('?')[0])
     .filter(target => target !== './config.js');
