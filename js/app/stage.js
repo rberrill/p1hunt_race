@@ -33,8 +33,14 @@ const HORIZON_FRACTION = 0.38;
 // a wide desktop stage doesn't draw a road wider than it is tall.
 const ROAD_HALF_WIDTH_FRACTION = 0.46;
 const ROAD_HALF_WIDTH_HEIGHT_CAP = 0.6;
-// Screen rows of road between the bottom edge and the horizon; each is one trapezoid.
+// Screen rows of road between the bottom edge and the far end of the drawn road (at
+// roadViewUnits, short of the horizon); each is one trapezoid. The last share of them fades
+// into the verge so the road rolls off at a vanishing point (Rich, 2026-11-01).
 const ROAD_STRIPS = 64;
+const ROAD_FADE_FRACTION = 0.25;
+// A strip's bend is integrated in steps this long at most (track units), so a far turn, where
+// one strip spans several units, slides in smoothly instead of popping (Rich, 2026-11-01).
+const BEND_STEP_UNITS = 0.1;
 // Kerb blocks and centre dashes repeat every so many track units, so they scroll with the road.
 const KERB_UNITS = 0.25;
 const DASH_UNITS = 0.5;
@@ -205,21 +211,34 @@ function curvatureAt(trackUnits) {
 }
 
 /**
- * computeStrips() → for each road strip from the bottom edge to the horizon: its depth from
- * the camera (track units), its perspective scale and the road centre's lateral offset (in
- * road widths, from the bend integrated outward). The same table places the cars.
+ * farScale() → the perspective scale at the far end of the drawn road (roadViewUnits ahead).
+ */
+function farScale() {
+  return Math.min(1, scene.config.cameraNearUnits / scene.config.roadViewUnits);
+}
+
+/**
+ * computeStrips() → for each road strip from the bottom edge to the far end of the drawn
+ * road: its depth from the camera (track units), its perspective scale and the road centre's
+ * lateral offset (in road widths, from the bend integrated outward in steps of at most
+ * BEND_STEP_UNITS). The same table places the cars.
  */
 function computeStrips() {
   const near = scene.config.cameraNearUnits;
+  const far = farScale();
   let heading = 0;
   let lateral = 0;
   let previousDepth = near;
   for (let i = 0; i <= ROAD_STRIPS; i++) {
-    const scale = 1 - i / (ROAD_STRIPS + 1);
+    const scale = 1 - (i / ROAD_STRIPS) * (1 - far);
     const depth = near / scale;
-    const stepUnits = depth - previousDepth;
-    heading += curvatureAt(camera.units + depth) * BEND_GAIN * stepUnits;
-    lateral += heading * stepUnits;
+    const stepCount = Math.max(1, Math.ceil((depth - previousDepth) / BEND_STEP_UNITS));
+    const stepUnits = (depth - previousDepth) / stepCount;
+    for (let step = 1; step <= stepCount; step++) {
+      const stepDepth = previousDepth + stepUnits * step;
+      heading += curvatureAt(camera.units + stepDepth) * BEND_GAIN * stepUnits;
+      lateral += heading * stepUnits;
+    }
     strips.depth[i] = depth;
     strips.scale[i] = scale;
     strips.lateral[i] = lateral;
@@ -229,11 +248,12 @@ function computeStrips() {
 
 /**
  * stripIndexFor(depthUnits) → the strip table position (fractional) for a depth, for
- * interpolating a car's lateral offset.
+ * interpolating a car's lateral offset; clamped to the table past the far end.
  */
 function stripIndexFor(depthUnits) {
   const scale = scene.config.cameraNearUnits / depthUnits;
-  return Math.min(ROAD_STRIPS, Math.max(0, (1 - scale) * (ROAD_STRIPS + 1)));
+  const position = ((1 - scale) / (1 - farScale())) * ROAD_STRIPS;
+  return Math.min(ROAD_STRIPS, Math.max(0, position));
 }
 
 /**
@@ -292,13 +312,17 @@ function fillStrip(leftNear, rightNear, yNear, leftFar, rightFar, yFar, color) {
 }
 
 /**
- * drawRoad() → the road from the bottom edge to the horizon, strip by strip: tarmac in two
+ * drawRoad() → the road from the bottom edge to its far end, strip by strip: tarmac in two
  * alternating shades, red and white kerbs and the centre dashes, all repeating by track
- * position so they scroll as the camera moves.
+ * position so they scroll as the camera moves. The last ROAD_FADE_FRACTION of the strips fade
+ * into the verge, so the road rolls off at a vanishing point.
  */
 function drawRoad() {
   const halfNear = roadHalfWidthNearPx();
+  const fadeStart = ROAD_STRIPS * (1 - ROAD_FADE_FRACTION);
+  const { ctx } = view;
   for (let i = 0; i < ROAD_STRIPS; i++) {
+    ctx.globalAlpha = i < fadeStart ? 1 : 1 - (i - fadeStart) / (ROAD_STRIPS - fadeStart);
     const scaleNear = strips.scale[i];
     const scaleFar = strips.scale[i + 1];
     const yNear = screenYAt(scaleNear) + 1;
@@ -332,6 +356,7 @@ function drawRoad() {
       );
     }
   }
+  ctx.globalAlpha = 1;
 }
 
 /**
@@ -341,7 +366,8 @@ function drawRoad() {
 function drawFinishLine() {
   const depth = scene.layout.finishUnits - camera.units;
   const near = scene.config.cameraNearUnits;
-  if (depth < near || depth > scene.config.viewDepthUnits * 2) return;
+  const farDepth = Math.min(scene.config.viewDepthUnits * 2, scene.config.roadViewUnits);
+  if (depth < near || depth > farDepth) return;
   const scale = near / depth;
   const y = screenYAt(scale);
   const centre = roadCentreXAt(scale, lateralAt(depth));

@@ -54,7 +54,8 @@ paths:
   divided by the trailing car's speed), the finish hold, the reduced-motion reveal. Exports `runToEnd` and `frameAt` for the
   test hook. `startRace` resets the play state first: a race left mid-run (the test hook can do
   it) would otherwise leave `isPlaying` set and the new race would never get a frame.
-- `js/app/stage.js`: the canvas. The perspective road from `trackLayout`, the camera (follows the
+- `js/app/stage.js`: the canvas. The perspective road from `trackLayout` (drawn `roadViewUnits`
+  ahead, fading out at a vanishing point; bends integrated in fine steps), the camera (follows the
   leader, parks at the finish), cars drawn from primitives in a palette by index, labels on cars
   drawn wide enough and always on the top three (lifted apart when they would overlap), the finish band, the start lights, `drawStill` for reduced motion.
 - `js/app/winner.js`: the Winner phase. The hero sized to the name, the finish order (phone:
