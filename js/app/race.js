@@ -11,7 +11,7 @@ import {
   raceSnapshot,
   trackLayout,
   finishResult,
-} from '../engine.js?v=0.1.0-dev.18';
+} from '../engine.js?v=0.1.0-dev.19';
 import {
   app,
   byId,
@@ -21,7 +21,7 @@ import {
   announce,
   formatRaceTime,
   phoneMedia,
-} from './core.js?v=0.1.0-dev.18';
+} from './core.js?v=0.1.0-dev.19';
 import {
   initStage,
   resizeStage,
@@ -29,7 +29,8 @@ import {
   drawFrame,
   drawStill,
   carColor,
-} from './stage.js?v=0.1.0-dev.18';
+  lightsBandPx,
+} from './stage.js?v=0.1.0-dev.19';
 
 // The timing tower and the HUD text are rewritten at most this often (frame time).
 const PANEL_INTERVAL_MS = 100;
@@ -298,7 +299,7 @@ function drawCurrentFrame(frameTimeMs, tickFraction = 0, clockMs = raceClockMs(f
   drawFrame(snapshot, {
     frameDeltaSec,
     lightsLit: lit,
-    lightsClear: lit >= 0 ? towerExtent() : null,
+    lightsClearPx: lit >= 0 ? towerRightBeside(lightsBandPx()) : 0,
   });
   if (frameTimeMs >= panelDueMs) {
     panelDueMs = frameTimeMs + PANEL_INTERVAL_MS;
@@ -311,21 +312,25 @@ function drawCurrentFrame(frameTimeMs, tickFraction = 0, clockMs = raceClockMs(f
 }
 
 /**
- * towerExtent() → { rightPx, bottomPx }: how far the timing tower's rows reach into the stage
- * from its top-left corner, so the lights can keep clear of them. The tower's box runs the
- * stage's height whatever it holds; its last visible row, or the "+ n more" line, is where its
- * content ends.
+ * towerRightBeside(band) → how far the timing tower's visible rows (or its "+ n more" line)
+ * that lie within `band` ({ topPx, bottomPx }, stage rows) reach into the stage from its left
+ * edge, 0 when none does; the lights keep clear of that. The rows are measured, not the
+ * tower's box: the box runs the stage's height and the small rows are narrow.
  */
-function towerExtent() {
+function towerRightBeside(band) {
   const wrap = byId('stageWrap').getBoundingClientRect();
-  const tower = byId('tower').getBoundingClientRect();
   const more = byId('towerMore');
-  let last = more.hidden ? null : more;
-  for (let i = towerRows.length - 1; i >= 0 && !last; i--) {
-    if (!towerRows[i].hidden) last = towerRows[i];
+  const lines = more.hidden ? towerRows : towerRows.concat([more]);
+  let rightPx = 0;
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].hidden) continue;
+    const rect = lines[i].getBoundingClientRect();
+    const top = rect.top - wrap.top;
+    const bottom = rect.bottom - wrap.top;
+    if (bottom <= band.topPx || top >= band.bottomPx) continue;
+    rightPx = Math.max(rightPx, rect.right - wrap.left);
   }
-  const bottomPx = last ? last.getBoundingClientRect().bottom - wrap.top : 0;
-  return { rightPx: Math.max(0, tower.right - wrap.left), bottomPx: Math.max(0, bottomPx) };
+  return rightPx;
 }
 
 /**

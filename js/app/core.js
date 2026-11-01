@@ -1,7 +1,7 @@
 // Shared foundations for the shell: the one app state object, DOM helpers that never parse
 // HTML, the phase switch, the card over the page, downloads and formatting. Every other app
 // module imports from here; this module imports only the config.
-import { CONFIG } from '../config.js?v=0.1.0-dev.18';
+import { CONFIG } from '../config.js?v=0.1.0-dev.19';
 
 // The three phases, in loop order. Each is a <section> in index.html; one shows at a time.
 export const PHASES = ['control', 'race', 'winner'];

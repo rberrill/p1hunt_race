@@ -591,15 +591,11 @@ function drawCars(snapshot) {
 /* ==== LIGHTS ==== */
 
 /**
- * drawLights(litCount, clear) → the start lights over the road: three discs, `litCount` of
- * them red, drawn while the countdown runs and for a moment after they go out. The box sits
- * just above the cars on the start line (where the camera's look-back puts them at tick 0),
- * centred on the road there. `clear` is { rightPx, bottomPx }: how far the timing tower's rows
- * reach into the stage. Only when they reach down to the lights is the box pushed right, as far
- * as it takes to clear them, so the two never overlap (Rich, 2026-11-01).
+ * lightsGeometry() → where the start lights go: { diameter, gap, totalWidth, boxTop, boxHeight,
+ * centredLeft }. The box sits just above the cars on the start line (where the camera's
+ * look-back puts them at tick 0), centred on the road there (Rich, 2026-11-01).
  */
-function drawLights(litCount, clear) {
-  const { ctx } = view;
+function lightsGeometry() {
   const diameter = Math.min(LIGHT_MAX_DIAMETER_PX, view.width * LIGHT_DIAMETER_FRACTION);
   const gap = diameter * 0.5;
   const totalWidth = LIGHT_COUNT * diameter + (LIGHT_COUNT - 1) * gap;
@@ -609,11 +605,32 @@ function drawLights(litCount, clear) {
   const boxHeight = diameter + gap;
   const boxBottom = screenYAt(startScale) - carHeightPx - LIGHT_CLEARANCE_PX;
   const boxTop = Math.max(LIGHT_TOP_MARGIN_PX, boxBottom - boxHeight);
-  const top = boxTop + gap / 2;
   const roadCentreX = roadCentreXAt(startScale, lateralAt(scene.config.lookBackUnits));
   const centredLeft = roadCentreX - totalWidth / 2;
-  const isBesideTower = boxTop < clear.bottomPx;
-  const clearLeft = isBesideTower ? clear.rightPx + gap * 2 : 0;
+  return { diameter, gap, totalWidth, boxTop, boxHeight, centredLeft };
+}
+
+/**
+ * lightsBandPx() → { topPx, bottomPx }: the rows of the stage the start lights' box occupies,
+ * so the shell can tell which tower rows are beside it.
+ */
+export function lightsBandPx() {
+  const geometry = lightsGeometry();
+  return { topPx: geometry.boxTop, bottomPx: geometry.boxTop + geometry.boxHeight };
+}
+
+/**
+ * drawLights(litCount, clearRightPx) → the start lights over the road: three discs, `litCount`
+ * of them red, drawn while the countdown runs and for a moment after they go out, centred on
+ * the road at the start line. `clearRightPx` is how far the timing tower's rows beside the
+ * lights reach into the stage (0 for none); only when the centred box would overlap them is
+ * it pushed right, as far as it takes, so the two never overlap (Rich, 2026-11-01).
+ */
+function drawLights(litCount, clearRightPx) {
+  const { ctx } = view;
+  const { diameter, gap, totalWidth, boxTop, boxHeight, centredLeft } = lightsGeometry();
+  const top = boxTop + gap / 2;
+  const clearLeft = clearRightPx > 0 ? clearRightPx + gap * 2 : 0;
   const left = Math.min(view.width - totalWidth - gap, Math.max(centredLeft, clearLeft));
   ctx.fillStyle = COLOR_TYRE;
   ctx.fillRect(left - gap, boxTop, totalWidth + gap * 2, boxHeight);
@@ -636,9 +653,9 @@ export function carColor(car) {
 }
 
 /**
- * drawFrame(snapshot, options) → one frame: { frameDeltaSec, lightsLit, lightsClear } where
- * lightsLit is -1 for no lights, else how many of the three are red, and lightsClear is
- * { rightPx, bottomPx }: how far the tower's rows reach into the stage from its top-left.
+ * drawFrame(snapshot, options) → one frame: { frameDeltaSec, lightsLit, lightsClearPx } where
+ * lightsLit is -1 for no lights, else how many of the three are red, and lightsClearPx is how
+ * far the tower's rows beside the lights reach into the stage (0 for none).
  */
 export function drawFrame(snapshot, options) {
   const { ctx } = view;
@@ -649,9 +666,7 @@ export function drawFrame(snapshot, options) {
   drawRoad();
   drawFinishLine();
   drawCars(snapshot);
-  if (options.lightsLit >= 0) {
-    drawLights(options.lightsLit, options.lightsClear || { rightPx: 0, bottomPx: 0 });
-  }
+  if (options.lightsLit >= 0) drawLights(options.lightsLit, options.lightsClearPx || 0);
 }
 
 /**
