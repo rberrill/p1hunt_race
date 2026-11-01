@@ -53,6 +53,12 @@ const LABEL_FONT_FRACTION = 0.34;
 const LABEL_FONT_MIN_PX = 10;
 const LABEL_FONT_MAX_PX = 16;
 const LABEL_PADDING_PX = 3;
+// The top three of the live order are always labelled (Rich, 2026-11-01), at this font at
+// least; one that would cover another top-three label is lifted by its own height, this many
+// times at most, so the top three never hide each other.
+const TOP_LABEL_COUNT = 3;
+const LABEL_FONT_TOP_MIN_PX = 12;
+const LABEL_LIFT_TRIES = 3;
 // The finish band: two rows of checks, this tall at the bottom edge.
 const FINISH_BAND_FRACTION = 0.06;
 const FINISH_CHECKS = 12;
@@ -97,6 +103,7 @@ const labels = {
   x: new Float64Array(MAX_CARS),
   y: new Float64Array(MAX_CARS),
   widthPx: new Float64Array(MAX_CARS),
+  isTop: new Uint8Array(MAX_CARS),
   left: new Float64Array(MAX_CARS),
   right: new Float64Array(MAX_CARS),
   top: new Float64Array(MAX_CARS),
@@ -395,24 +402,25 @@ function drawCar(x, y, widthPx, color) {
 }
 
 /**
- * labelFontPx(widthPx) → the label's font size for a car of this drawn width.
+ * labelFontPx(widthPx, isTop) → the label font for a car drawn widthPx wide: a share of the
+ * car's width within bounds; a top-three label never goes below LABEL_FONT_TOP_MIN_PX.
  */
-function labelFontPx(widthPx) {
-  return Math.max(LABEL_FONT_MIN_PX, Math.min(LABEL_FONT_MAX_PX, widthPx * LABEL_FONT_FRACTION));
+function labelFontPx(widthPx, isTop) {
+  const minPx = isTop ? LABEL_FONT_TOP_MIN_PX : LABEL_FONT_MIN_PX;
+  return Math.max(minPx, Math.min(LABEL_FONT_MAX_PX, widthPx * LABEL_FONT_FRACTION));
 }
 
 /**
- * drawLabel(x, y, widthPx, text) → the display name above a car on a dark backing, with its
- * bottom at the car's top.
+ * drawLabel(x, y, widthPx, text, fontPx, liftPx) → a name on a dark pill above the car at
+ * (x, y) drawn widthPx wide, liftPx higher than its resting place.
  */
-function drawLabel(x, y, widthPx, text) {
+function drawLabel(x, y, widthPx, text, fontPx, liftPx) {
   const { ctx } = view;
-  const fontPx = labelFontPx(widthPx);
   ctx.font = `600 ${fontPx}px system-ui, sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'bottom';
   const textWidth = ctx.measureText(text).width;
-  const top = y - widthPx * CAR_HEIGHT_RATIO - fontPx - LABEL_PADDING_PX * 2;
+  const top = y - widthPx * CAR_HEIGHT_RATIO - fontPx - LABEL_PADDING_PX * 2 - liftPx;
   ctx.fillStyle = COLOR_LABEL_BG;
   ctx.fillRect(
     x - textWidth / 2 - LABEL_PADDING_PX,
@@ -425,47 +433,74 @@ function drawLabel(x, y, widthPx, text) {
 }
 
 /**
- * drawLabels() → places this frame's label candidates nearest car first; a label that would
- * overlap one already placed is dropped, so a bunched pack never reads as a pile of text.
- * The accepted boxes are kept in the same arrays, compacted from the front.
+ * drawLabels() → places this frame's label candidates: the top three of the live order first
+ * (always drawn; one that would cover another top-three label is lifted above it), then the
+ * rest nearest car first, dropping any that would overlap a label already placed, so a bunched
+ * pack never reads as a pile of text. The accepted boxes are kept in the same arrays,
+ * compacted from the front.
  */
 function drawLabels() {
-  const { ctx } = view;
   let accepted = 0;
+  for (let i = 0; i < labels.count; i++) {
+    if (labels.isTop[i]) accepted = placeLabel(i, accepted, true);
+  }
   for (let i = labels.count - 1; i >= 0; i--) {
-    const fontPx = labelFontPx(labels.widthPx[i]);
-    ctx.font = `600 ${fontPx}px system-ui, sans-serif`;
-    const text = scene.displayNames[labels.car[i]];
-    const halfWidth = ctx.measureText(text).width / 2 + LABEL_PADDING_PX;
-    const bottom = labels.y[i] - labels.widthPx[i] * CAR_HEIGHT_RATIO;
-    const left = labels.x[i] - halfWidth;
-    const right = labels.x[i] + halfWidth;
-    const top = bottom - fontPx - LABEL_PADDING_PX * 2;
-    let isFree = true;
-    for (let j = 0; j < accepted; j++) {
-      const isApart = right < labels.left[j]
-        || left > labels.right[j]
-        || bottom < labels.top[j]
-        || top > labels.bottom[j];
-      if (!isApart) {
-        isFree = false;
-        break;
-      }
-    }
-    if (!isFree) continue;
-    drawLabel(labels.x[i], labels.y[i], labels.widthPx[i], text);
-    labels.left[accepted] = left;
-    labels.right[accepted] = right;
-    labels.top[accepted] = top;
-    labels.bottom[accepted] = bottom;
-    accepted++;
+    if (!labels.isTop[i]) accepted = placeLabel(i, accepted, false);
   }
   labels.count = 0;
 }
 
 /**
+ * placeLabel(i, accepted, isForced) → the accepted count after candidate i. Measures its box;
+ * a forced label is lifted by its own height until it is free (LABEL_LIFT_TRIES at most) and
+ * always drawn, an ordinary one is dropped when it overlaps. An accepted box is recorded at
+ * index `accepted`.
+ */
+function placeLabel(i, accepted, isForced) {
+  const { ctx } = view;
+  const fontPx = labelFontPx(labels.widthPx[i], isForced);
+  ctx.font = `600 ${fontPx}px system-ui, sans-serif`;
+  const text = scene.displayNames[labels.car[i]];
+  const halfWidth = ctx.measureText(text).width / 2 + LABEL_PADDING_PX;
+  const heightPx = fontPx + LABEL_PADDING_PX * 2;
+  const left = labels.x[i] - halfWidth;
+  const right = labels.x[i] + halfWidth;
+  let bottom = labels.y[i] - labels.widthPx[i] * CAR_HEIGHT_RATIO;
+  let liftPx = 0;
+  let tries = 0;
+  while (isForced && tries < LABEL_LIFT_TRIES) {
+    if (isBoxFree(left, right, bottom - heightPx, bottom, accepted)) break;
+    bottom -= heightPx + 1;
+    liftPx += heightPx + 1;
+    tries++;
+  }
+  if (!isForced && !isBoxFree(left, right, bottom - heightPx, bottom, accepted)) return accepted;
+  drawLabel(labels.x[i], labels.y[i], labels.widthPx[i], text, fontPx, liftPx);
+  labels.left[accepted] = left;
+  labels.right[accepted] = right;
+  labels.top[accepted] = bottom - heightPx;
+  labels.bottom[accepted] = bottom;
+  return accepted + 1;
+}
+
+/**
+ * isBoxFree(left, right, top, bottom, accepted) → whether the box clears every accepted box.
+ */
+function isBoxFree(left, right, top, bottom, accepted) {
+  for (let j = 0; j < accepted; j++) {
+    const isApart = right < labels.left[j]
+      || left > labels.right[j]
+      || bottom < labels.top[j]
+      || top > labels.bottom[j];
+    if (!isApart) return false;
+  }
+  return true;
+}
+
+/**
  * drawCars(snapshot) → every car in view, far to near so the near ones overlap, each at its
- * lane across the road; labels on the cars drawn at least labelMinWidthPx wide.
+ * lane across the road; labels on the cars drawn at least labelMinWidthPx wide and always on
+ * the top three of the live order (Rich, 2026-11-01).
  */
 function drawCars(snapshot) {
   const near = scene.config.cameraNearUnits;
@@ -483,11 +518,13 @@ function drawCars(snapshot) {
     const x = centre + snapshot.lane[car] * roadHalfWidthNearPx() * scale * 0.82;
     const widthPx = carWidthNear * scale;
     drawCar(x, y, widthPx, scene.colors[car]);
-    if (widthPx >= labelMin && labels.count < MAX_CARS) {
+    const isTop = i < TOP_LABEL_COUNT;
+    if ((isTop || widthPx >= labelMin) && labels.count < MAX_CARS) {
       labels.car[labels.count] = car;
       labels.x[labels.count] = x;
       labels.y[labels.count] = y;
       labels.widthPx[labels.count] = widthPx;
+      labels.isTop[labels.count] = isTop ? 1 : 0;
       labels.count++;
     }
   }
