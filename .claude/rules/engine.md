@@ -42,7 +42,12 @@ decision log).
   tests' way to the end.
 - **Randomness:** xoshiro128** seeded from FNV-1a of `seedText + ':' + purpose` through the
   MurmurHash3 finalizer; one stream per purpose (`track`, `lanes`, `car:<index>`), so a change
-  to one part's draws never shifts another's. Cars are keyed by list index, not name.
+  to one part's draws never shifts another's. Cars are keyed by list index, not name. The
+  seed's case is folded (`seedKey`); the text is kept as typed for display.
+- **The fingerprint:** `REFERENCE_FINGERPRINT` is the hash of the reference race's finish,
+  measured in Node. Any change to the race's arithmetic or tunables moves it: update the
+  constant in the same change, and treat the change as user-visible (a version bump), since
+  old seeds now give other races.
 - **Track (Rich):** 2 to 3 turns per 10 s of duration; 1 to 3 long straights among short
   ones (never more than half, Claude's call); each turn a seeded direction and apex speed with
   fixed braking and exit zones. The straights scale so the nominal car (every factor 1.0)

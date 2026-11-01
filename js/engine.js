@@ -56,15 +56,24 @@ function rotateLeft(value, bits) {
 }
 
 /**
+ * seedKey(seedText) → the text the generator is seeded from.
+ * The seed's case is folded (Rich's decision, 2026-11-01): a viewer retyping K7MX-4QZD from a
+ * stream as k7mx-4qzd gets the same race. The seed is still shown as typed.
+ */
+function seedKey(seedText) {
+  return seedText.toUpperCase();
+}
+
+/**
  * createRandom(seedText, purpose) → { nextUint32, nextFloat, nextBetween, nextInt }.
  * A xoshiro128** generator (Blackman and Vigna, 2018; public domain, their file
- * xoshiro128starstar.c) seeded from FNV-1a of `seedText + ':' + purpose`. Each purpose
- * ('track', 'lanes', 'car:7') is its own stream, so the draws one part of the race takes never
- * shift another part's.
+ * xoshiro128starstar.c) seeded from FNV-1a of `seedKey(seedText) + ':' + purpose`. Each
+ * purpose ('track', 'lanes', 'car:7') is its own stream, so the draws one part of the race
+ * takes never shift another part's.
  * Formula names: s0 s1 s2 s3 t
  */
 function createRandom(seedText, purpose) {
-  const hash = hashText(`${seedText}:${purpose}`);
+  const hash = hashText(`${seedKey(seedText)}:${purpose}`);
   let s0 = mixWord(hash + Math.imul(1, GOLDEN_RATIO_32));
   let s1 = mixWord(hash + Math.imul(2, GOLDEN_RATIO_32));
   let s2 = mixWord(hash + Math.imul(3, GOLDEN_RATIO_32));
@@ -125,8 +134,8 @@ export function sanitizeName(value) {
 }
 
 /**
- * sanitizeSeed(value) → string. The seed as plain text, at most maxSeedLength. Compared as
- * typed (after this cleaning): 'abc' and 'ABC' are different seeds.
+ * sanitizeSeed(value) → string. The seed as plain text, at most maxSeedLength. Kept as typed
+ * for display; the race folds its case (seedKey), so 'abc' and 'ABC' are the same race.
  */
 export function sanitizeSeed(value) {
   return cleanText(value, CONFIG.maxSeedLength);
@@ -1107,6 +1116,12 @@ const TEST_SEED_COUNT = 8;
 // share of the duration, the last car no later than that share.
 const WINNER_EARLIEST_SHARE = 0.9;
 const LAST_CAR_LATEST_SHARE = 1.15;
+// The reference race: 75 cars, this seed, 30 s on the stock config, and the FNV-1a hash of its
+// finish signature as measured in Node (V8). The same value on an iPhone (JavaScriptCore) is the
+// proof that the engine's arithmetic is identical across engines; a tuning change moves it, and
+// that is a user-visible change (a new version), so the constant is updated with the version.
+const REFERENCE_SEED = 'P1HUNT';
+const REFERENCE_FINGERPRINT = 'edd3b33f';
 
 /**
  * testEntrants(count) → [{ name }], `count` distinct names.
@@ -1206,6 +1221,14 @@ function determinismTests(check) {
   const otherDuration = finishSignature(runToFinish(raceFor(75, seed, 31)));
   check('Determinism: another seed or another duration gives another race',
     otherSeed !== tickByTick && otherDuration !== tickByTick, 'seed and duration both matter');
+  const lowerCase = raceFor(75, 'k7mx-4qzd', 30);
+  check('Determinism: the seed is case-folded for the race and kept as typed for display',
+    finishSignature(runToFinish(lowerCase)) === tickByTick && lowerCase.seed === 'k7mx-4qzd',
+    lowerCase.seed);
+  const fingerprint = hashText(finishSignature(runToFinish(raceFor(75, REFERENCE_SEED, 30))))
+    .toString(16);
+  check('Determinism: the reference race matches the fingerprint measured in Node',
+    fingerprint === REFERENCE_FINGERPRINT, `${fingerprint} (expected ${REFERENCE_FINGERPRINT})`);
   const twins = createRace({
     entrants: [{ name: 'Rich' }, { name: 'Rich' }, { name: 'Rich' }],
     seed,
