@@ -6,15 +6,19 @@ It's made for breakers running a live stream: share the browser window from a co
 
 **Status:** in development, nothing released yet. The first release will be on GitHub Pages at [rberrill.github.io/p1hunt_race](https://rberrill.github.io/p1hunt_race/).
 
-## What it will do
+## What it does
 
 Three screens in a loop:
 
-1. **Control.** The entrant list (typed one per line, or imported from a CSV using the template the app offers), the seed and the race duration, on one page the audience can read. **Start race** hands the screen to the race.
-2. **Race.** A vertical road in a retro arcade style, cars seen from behind, racing toward the finish, with the live order shown alongside. Pause and Reset stay out of the picture. It's a simulated race decided by the seed, not a reveal of a result picked in advance: the track is laid out from the seed and the duration, every car runs the same rules, and every car crosses the line, so every place has a real time.
-3. **Winner.** The winner, large, and the full finishing order, with CSV and JSON export. **Re-run** plays the identical race again; **Start over** goes back to the list with a fresh seed.
+1. **Control.** The entrant list (typed one per line, or imported from a CSV using the template the app offers), the starting grid, the seed and the race duration, on one page the audience can read. **Start race** hands the screen to the race.
+2. **Race.** A vertical road in a retro arcade style, cars seen from behind, racing toward the finish, with three start lights and the live order alongside. Pause and Reset sit in a bar under the road; a tap on the road shows them large. It's a simulated race decided by the seed, not a reveal of a result picked in advance: the track is laid out from the seed and the duration, every car runs the same rules, and every car crosses the line, so every place has a real time. A hidden tab pauses the race, which resumes where it was.
+3. **Winner.** The winner, large, and the full finishing order with times, with CSV and JSON export. **Re-run this race** plays the identical race again; **Start over** goes back to the list with a fresh seed.
 
-Everything stays in your browser: no accounts, no server, no uploads, no analytics. See [SECURITY.md](SECURITY.md) for what's stored on your device.
+The list, seed and duration are saved in the browser as you edit, so a reload offers to resume. Everything stays in your browser: no accounts, no server, no uploads, no analytics. See [SECURITY.md](SECURITY.md) for what's stored on your device.
+
+### Settings in the link
+
+Every tunable can be set in the link, within safe limits, for example `?durationSec=45`. A race run from such a link shows a "Tuned link" chip on every screen and writes the settings into its exports, so a tweaked link can't pose as a stock race. `?selftest=1` runs the engine's self-tests in the browser and shows the version and the reference-race fingerprint; `?reducedMotion=1` shows the finish without motion.
 
 ## How it's built
 

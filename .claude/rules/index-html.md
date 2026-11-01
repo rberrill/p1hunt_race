@@ -8,8 +8,10 @@ paths:
 `tests/selftest.js` enforces all of these.
 
 - The Content Security Policy `<meta>` stays **before any stylesheet or script**, with
-  `default-src 'none'`, `script-src 'self'`, `style-src 'self'`, `base-uri 'none'`, and no
-  `unsafe-*`, wildcards or other hosts.
+  `default-src 'none'`, `script-src 'self'`, `style-src 'self'`, `img-src 'self'` (the icons),
+  `connect-src 'self'` (the app fetches nothing itself; it lets the verify recipe refresh the
+  browser cache with a page-side `fetch` of the site's own files, Claude's call),
+  `base-uri 'none'`, and no `unsafe-*`, wildcards or other hosts.
 - Nothing inline: no `<script>` without `src`, no `style="…"`, no `on…="…"` handlers. Styles go
   in `css/app.css`.
 - One entry script, `<script type="module" src="js/app/main.js?v=…">`; every other module is

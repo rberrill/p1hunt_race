@@ -6,7 +6,7 @@
 // what a car at cruise speed covers in one second, so a straight of 3 units is a 3 s straight.
 
 export const CONFIG = {
-  appVersion: '0.1.0-dev',
+  appVersion: '0.1.0-dev.1',
   storageKey: 'p1hunt.race.v1',
 
   // Race time (not overridable: it is the definition of race time)
@@ -42,6 +42,21 @@ export const CONFIG = {
   cornerSpread: 0.08,
   accelerationPerSec: 0.8,
   brakingPerSec: 2,
+
+  // The shell and the stage: how the race is shown, never what it decides. Shell time, in the
+  // units named. The countdown, the hold after the last car and the reduced-motion reveal are
+  // Rich's decisions (2026-11-01); the numbers and the camera are Claude's starting values
+  startCountdownSec: 3,
+  finishHoldMs: 1500,
+  revealSec: 4,
+  overlayHideMs: 4000,
+  maxFrameGapMs: 1000,
+  cameraNearUnits: 0.6,
+  lookBackUnits: 1.5,
+  viewDepthUnits: 6,
+  labelMinWidthPx: 28,
+  reducedMotion: 0,
+  saveDebounceMs: 300,
 };
 
 // [min, max] for every key a link may override. A key missing here is not overridable.
@@ -63,4 +78,14 @@ export const CONFIG_LIMITS = {
   cornerSpread: [0, 0.3],
   accelerationPerSec: [0.2, 5],
   brakingPerSec: [0.2, 10],
+  startCountdownSec: [0, 5],
+  finishHoldMs: [0, 5000],
+  revealSec: [1, 10],
+  overlayHideMs: [1000, 10000],
+  maxFrameGapMs: [200, 5000],
+  cameraNearUnits: [0.1, 2],
+  lookBackUnits: [0, 6],
+  viewDepthUnits: [2, 20],
+  labelMinWidthPx: [0, 200],
+  reducedMotion: [0, 1],
 };

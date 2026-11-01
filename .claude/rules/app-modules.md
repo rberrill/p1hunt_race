@@ -30,7 +30,30 @@ paths:
 ## Where things are
 
 - `js/config.js`: `CONFIG` (every tunable, `appVersion`, `storageKey`) and `CONFIG_LIMITS` (the
-  link-overridable keys with their ranges).
-
-`js/app/` is not written yet. When the modules exist, list each one here with what it owns (as
-the Finisher's `shell-modules.md` does), and keep the list current.
+  link-overridable keys with their ranges). The shell's tunables (`startCountdownSec`,
+  `finishHoldMs`, `revealSec`, `overlayHideMs`, `maxFrameGapMs`, the camera's units,
+  `labelMinWidthPx`, `reducedMotion`, `saveDebounceMs`) sit after the engine's.
+- `js/app/main.js`: the entry. Link settings through `sanitizeOverrides`; the saved session and
+  the Resume card; the phase loop (Start race → the race → the record saved → the Winner screen →
+  Re-run or Start over); `?selftest=1`; `window.__race`.
+- `js/app/core.js`: the `app` state object, `byId` / `makeEl` / `setText`, `showPhase`, the card
+  over the page (`showCard` / `hideCard`; the phases are made `inert` while it shows), the ARIA
+  live region, `files.download`, time and date formatting, the Tuned link chips.
+- `js/app/session.js`: localStorage under `CONFIG.storageKey`, read through
+  `sanitizeStoredSession`; the debounced save, `clearStoredSession`, the Resume / Start over card.
+- `js/app/control.js`: the Control phase. The textarea is the list's source of truth; the tabs;
+  CSV import (`parseCsv` → `expandEntrants`, one line per entrant); the starting grid (phone: six,
+  then Show all); the Clear confirmation card; the seed (New, Locked / Unlocked); the duration
+  slider; the Start race gate and its message.
+- `js/app/race.js`: the Race phase. The race clock (playing time only; `clockToTicks` owes the
+  engine its ticks), the frame loop, the countdown, Pause / Play / Reset, the tapped-stage
+  overlay, the hidden-tab pause, the HUD and the live order panel (trimmed to what fits, "+ n
+  more"), the finish hold, the reduced-motion reveal. Exports `runToEnd` and `frameAt` for the
+  test hook. `startRace` resets the play state first: a race left mid-run (the test hook can do
+  it) would otherwise leave `isPlaying` set and the new race would never get a frame.
+- `js/app/stage.js`: the canvas. The perspective road from `trackLayout`, the camera (follows the
+  leader, parks at the finish), cars drawn from primitives in a palette by index, labels only on
+  cars drawn wide enough, the finish band, the start lights, `drawStill` for reduced motion.
+- `js/app/winner.js`: the Winner phase. The hero sized to the name, the finish order (phone:
+  eight, then Show all), CSV / JSON export named `p1hunt-race-<seed>-<yyyymmdd-hhmm>`, Copy result
+  only where the clipboard exists, Re-run and Start over.

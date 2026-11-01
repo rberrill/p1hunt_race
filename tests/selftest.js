@@ -204,7 +204,8 @@ if (!scripts.length) {
     + 'Number Object Promise Set String TextDecoder TextEncoder URL URLSearchParams Uint8Array '
     + 'Uint32Array clearInterval clearTimeout console document isFinite localStorage location '
     + 'matchMedia navigator parseFloat parseInt performance requestAnimationFrame '
-    + 'cancelAnimationFrame setInterval setTimeout undefined window globalThis'
+    + 'cancelAnimationFrame setInterval setTimeout undefined window globalThis Boolean crypto '
+    + 'ResizeObserver'
   ).split(' '));
   const badImports = [];
   const unknown = [];

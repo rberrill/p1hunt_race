@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<!-- Content Security Policy: only this site's own scripts, styles and images run or load.
+     Nothing is fetched from anywhere else. GitHub Pages can't send headers, so this is a meta
+     tag (which can't set frame-ancestors). Keep it before the first <link>/<script>. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#161618">
+<title>P1 Hunt Race</title>
+<link rel="icon" href="icons/favicon.ico?v=0.1.0-dev.1" sizes="32x32">
+<link rel="icon" href="icons/icon.svg?v=0.1.0-dev.1" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=0.1.0-dev.1">
+<link rel="stylesheet" href="css/app.css?v=0.1.0-dev.1">
+</head>
+<body>
+<div id="app">
+
+  <!-- ==== CONTROL: the entrant list, the seed and the duration, readable on stream ==== -->
+  <section id="phaseControl" class="phase phase-control" aria-labelledby="controlTitle">
+    <header class="top-bar">
+      <h1 class="brand" id="controlTitle"><span class="mark">P1</span> P1 Hunt Race</h1>
+      <span class="tuned" id="controlTuned" hidden></span>
+      <span class="badge" id="controlBadge">Standby</span>
+    </header>
+    <p class="back-line" id="backLine" hidden></p>
+    <div class="control-grid">
+      <section class="panel entrants-panel" aria-labelledby="entrantsTitle">
+        <h2 id="entrantsTitle">Entrants <span class="count" id="entrantCount">0</span></h2>
+        <div class="tabs" role="tablist">
+          <button class="tab" id="tabType" role="tab" aria-selected="true">Type names</button>
+          <button class="tab" id="tabImport" role="tab" aria-selected="false">Import CSV</button>
+        </div>
+        <div id="paneType" class="pane">
+          <label class="hint" for="entrantText">One name per line</label>
+          <textarea id="entrantText" rows="12" spellcheck="false" autocomplete="off"
+            autocapitalize="off" placeholder="Jordan&#10;Alex&#10;Taylor"></textarea>
+        </div>
+        <div id="paneImport" class="pane" hidden>
+          <p class="hint">A CSV with a <code>name</code> column and an optional
+            <code>spots</code> column (blank = 1). Spots add up across lines.</p>
+          <input type="file" id="csvFile" accept=".csv,text/csv" hidden>
+          <button class="btn" id="btnChooseCsv">Choose CSV file</button>
+          <ul id="importProblems" class="problems"></ul>
+        </div>
+        <div class="row">
+          <button class="btn" id="btnLoadGrid">Load grid</button>
+          <button class="btn" id="btnClear">Clear</button>
+        </div>
+        <button class="btn btn-link" id="btnTemplate">Download CSV template</button>
+        <p class="hint">2 to 100 entries. Blank lines ignored.</p>
+      </section>
+
+      <section class="panel grid-panel" aria-labelledby="gridTitle">
+        <h2 id="gridTitle">Starting grid
+          <span class="hint">readable on stream · viewers confirm the list</span></h2>
+        <ol id="startingGrid" class="grid-list" aria-live="polite"></ol>
+        <button class="btn btn-ghost" id="btnShowGrid" hidden>Show all</button>
+        <p class="hint">Grid order is the typed order; the race order comes from the seed.</p>
+      </section>
+
+      <section class="panel setup-panel" aria-labelledby="setupTitle">
+        <h2 id="setupTitle">Race setup</h2>
+        <label class="field-label" for="seedInput">Seed
+          <span class="badge badge-small" id="seedBadge">Unlocked</span></label>
+        <div class="row">
+          <input type="text" id="seedInput" maxlength="40" spellcheck="false"
+            autocomplete="off" autocapitalize="characters">
+          <button class="btn" id="btnNewSeed">New</button>
+        </div>
+        <p class="hint">Same entrants, duration and seed give the same finish.</p>
+        <label class="field-label" for="durationInput">Duration
+          <output id="durationOut" for="durationInput">30 s</output></label>
+        <input type="range" id="durationInput" min="10" max="120" step="5" value="30">
+        <dl class="readouts">
+          <dt>Entrants</dt><dd id="setupEntrants">0</dd>
+          <dt>Grid</dt><dd id="setupGrid">Empty</dd>
+        </dl>
+        <p class="hint">Progress is saved as you go. Reloading asks Resume / Start over.</p>
+      </section>
+
+      <div class="action-bar control-actions">
+        <button class="btn btn-primary btn-big" id="btnStart" disabled>Start race</button>
+        <p class="message" id="startMessage">Add at least 2 entrants</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==== RACE: the stage is the picture the stream captures ==== -->
+  <section id="phaseRace" class="phase phase-race" aria-labelledby="raceTitle" hidden>
+    <header class="top-bar race-bar">
+      <h1 class="brand" id="raceTitle"><span class="mark">P1</span> P1 Hunt Race</h1>
+      <div class="hud">
+        <span class="hud-elapsed" id="hudElapsed">0:00.0</span>
+        <span class="hud-label">elapsed</span>
+      </div>
+      <span class="hud-seed">Seed <b id="hudSeed"></b></span>
+      <span class="tuned" id="raceTuned" hidden></span>
+      <span class="badge badge-live" id="raceBadge">Live</span>
+    </header>
+    <div class="race-body">
+      <aside class="order-panel" id="orderPanel" aria-labelledby="orderTitle">
+        <h2 id="orderTitle">Live order</h2>
+        <p class="leader-chip">Leader <b id="hudLeader">—</b></p>
+        <ol id="liveOrder" class="order-list"></ol>
+        <p class="order-more" id="orderMore" hidden></p>
+      </aside>
+      <div class="stage-wrap" id="stageWrap">
+        <canvas id="stage" aria-hidden="true"></canvas>
+        <div class="stage-overlay" id="stageOverlay" hidden>
+          <button class="btn btn-round" id="overlayPause" aria-label="Pause">
+            <svg viewBox="0 0 24 24" class="icon-pause"><path d="M8 5v14M16 5v14"/></svg>
+            <svg viewBox="0 0 24 24" class="icon-play"><path d="M7 4l13 8-13 8z"/></svg>
+          </button>
+          <div class="row">
+            <button class="btn" id="overlayReset">Reset race</button>
+            <button class="btn" id="overlayBack">Back to race</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="button-bar">
+      <button class="btn" id="btnPause" aria-label="Pause">
+        <svg viewBox="0 0 24 24" class="icon-pause"><path d="M8 5v14M16 5v14"/></svg>
+        <svg viewBox="0 0 24 24" class="icon-play"><path d="M7 4l13 8-13 8z"/></svg>
+      </button>
+      <button class="btn" id="btnReset">Reset</button>
+    </div>
+  </section>
+
+  <!-- ==== WINNER: the winner large, the finish order, exports and the loop back ==== -->
+  <section id="phaseWinner" class="phase phase-winner" aria-labelledby="winnerTitle" hidden>
+    <header class="top-bar">
+      <h1 class="brand" id="winnerTitle"><span class="mark">P1</span> P1 Hunt Race</h1>
+      <span class="tuned" id="winnerTuned" hidden></span>
+      <span class="badge" id="winnerBadge">Checkered</span>
+    </header>
+    <div class="winner-grid">
+      <div class="hero">
+        <p class="hero-label">Winner · P1</p>
+        <p class="hero-name" id="winnerName"></p>
+        <p class="hero-line" id="winnerLine"></p>
+      </div>
+      <div class="action-bar winner-actions">
+        <button class="btn btn-big" id="btnRerun">Re-run this race
+          <small id="rerunNote">same entrants, duration and seed · identical result</small></button>
+        <button class="btn btn-primary btn-big" id="btnStartOver">Start over
+          <small>back to Control with the list kept, new seed</small></button>
+      </div>
+      <section class="panel exports-panel" aria-labelledby="exportsTitle">
+        <h2 id="exportsTitle">Race record</h2>
+        <div class="row">
+          <button class="btn" id="btnExportCsv">Export CSV</button>
+          <button class="btn" id="btnExportJson">Export JSON</button>
+          <button class="btn" id="btnCopy">Copy result</button>
+        </div>
+        <p class="hint" id="recordLine"></p>
+      </section>
+      <section class="panel finish-panel" aria-labelledby="finishTitle">
+        <h2 id="finishTitle">Finish order <span class="hint" id="finishCount"></span></h2>
+        <ol id="finishOrder" class="grid-list finish-list"></ol>
+        <button class="btn btn-ghost" id="btnShowFinish" hidden>Show all</button>
+      </section>
+    </div>
+  </section>
+
+  <!-- A card over the dimmed page: the Resume / Start over question, and Clear's confirmation.
+       Nothing behind it is tappable while it shows (the phases are made inert). -->
+  <div class="backdrop" id="cardBackdrop" hidden>
+    <div class="card" role="dialog" aria-modal="true" aria-labelledby="cardTitle">
+      <p class="card-kicker" id="cardKicker"></p>
+      <h2 id="cardTitle"></h2>
+      <p class="card-body" id="cardBody"></p>
+      <p class="card-body" id="cardBodyMore"></p>
+      <button class="btn btn-primary btn-big" id="cardPrimary"></button>
+      <button class="btn btn-big" id="cardSecondary"></button>
+    </div>
+  </div>
+
+  <p class="selftest" id="selftestPanel" hidden></p>
+  <p class="visually-hidden" id="liveRegion" aria-live="polite"></p>
+</div>
+<script type="module" src="js/app/main.js?v=0.1.0-dev.1"></script>
+</body>
+</html>
