@@ -2,9 +2,9 @@
 // localStorage under CONFIG.storageKey, saved as changes are made and offered back on reload
 // as a Resume / Start over question (the Finisher's rule; Rich, 2026-11-01). Everything read
 // back goes through the engine's sanitizer.
-import { CONFIG } from '../config.js?v=0.1.0-dev.3';
-import { sanitizeStoredSession } from '../engine.js?v=0.1.0-dev.3';
-import { app, showCard, formatSavedAt } from './core.js?v=0.1.0-dev.3';
+import { CONFIG } from '../config.js?v=0.1.0-dev.4';
+import { sanitizeStoredSession } from '../engine.js?v=0.1.0-dev.4';
+import { app, showCard, formatSavedAt } from './core.js?v=0.1.0-dev.4';
 
 let saveTimer = 0;
 
