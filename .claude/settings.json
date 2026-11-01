@@ -1,0 +1,43 @@
+{
+  "permissions": {
+    "ask": [
+      "Bash(git push *)",
+      "Bash(git merge *)",
+      "Bash(git tag *)"
+    ],
+    "deny": [
+      "Bash(git push --tags*)",
+      "Bash(git push * --tags*)",
+      "Bash(git push --force* origin main*)",
+      "Bash(git push -f origin main*)",
+      "Bash(git push origin +main*)",
+      "Bash(git push --force* origin *:main*)",
+      "Bash(git push --force* origin *:refs/heads/main*)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/session-context.js\"",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/stop-selftest.js\"",
+            "timeout": 30,
+            "statusMessage": "Running selftest"
+          }
+        ]
+      }
+    ]
+  }
+}

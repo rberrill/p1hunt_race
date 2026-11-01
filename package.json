@@ -1,0 +1,9 @@
+{
+  "name": "p1hunt-race",
+  "private": true,
+  "description": "Tells Node that the .js files are ES modules. No dependencies, no build step.",
+  "type": "module",
+  "scripts": {
+    "test": "node tests/selftest.js"
+  }
+}

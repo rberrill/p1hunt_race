@@ -1,0 +1,16 @@
+# Local only, never pushed: personal and machine notes, the UAT scripts (they hold sign-offs and the
+# LAN address), the product definition and wireframes, retired docs, and per-machine Claude settings.
+# CLAUDE.md and the rest of .claude/ are public.
+CLAUDE.local.md
+archive/
+tests/UAT-*.md
+tests/uat/
+.claude/settings.local.json
+.claude/worktrees/
+
+# OS / editor clutter
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/

@@ -1,0 +1,19 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "race",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "8768", "--bind", "127.0.0.1"],
+      "port": 8768,
+      "autoPort": false
+    },
+    {
+      "name": "subfolder",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "8772", "--bind", "127.0.0.1", "--directory", ".."],
+      "port": 8772,
+      "autoPort": false
+    }
+  ]
+}
