@@ -833,6 +833,25 @@ export function runToFinish(race) {
 }
 
 /**
+ * clockToTicks(race, raceClockMs) → { ticksDue, tickFraction }.
+ * The shell keeps a race clock in milliseconds (wall time while the race is playing, not
+ * counting pauses or a hidden tab) and asks, each frame, how many ticks it owes the engine
+ * (`ticksDue`, to run with advanceTick) and how far the frame is into the next tick
+ * (`tickFraction`, 0 to 1, for raceSnapshot). Computed from the whole clock, never by adding
+ * up frame deltas, so the ticks run never drift from the clock. The frame rate only sets how
+ * often this is asked. Negative or non-numeric input owes nothing.
+ */
+export function clockToTicks(race, raceClockMs) {
+  const clockMs = Number(raceClockMs);
+  const ticksElapsed = clockMs > 0 ? clockMs * race.config.ticksPerSecond / 1000 : 0;
+  const wholeTicks = Math.floor(ticksElapsed);
+  return {
+    ticksDue: Math.max(0, wholeTicks - race.tick),
+    tickFraction: ticksElapsed - wholeTicks,
+  };
+}
+
+/**
  * liveOrder(race) → [carIndex, …], leader first.
  * Crossed cars by place, then the rest by distance.
  */
@@ -1359,6 +1378,17 @@ function raceTests(check) {
   }
   check('Race: bad inputs are refused with an error', refused.length === attempts.length,
     refused.join(', '));
+  const clocked = raceFor(5, 'clock', 10);
+  const firstFrame = clockToTicks(clocked, 1000);
+  for (let i = 0; i < firstFrame.ticksDue; i++) advanceTick(clocked);
+  const sameFrame = clockToTicks(clocked, 1000);
+  const partTick = clockToTicks(clocked, 1025);
+  const noClock = clockToTicks(clocked, 'soon');
+  check('Race: clockToTicks owes the whole clock in ticks, never drifting, with the fraction',
+    firstFrame.ticksDue === 60 && clocked.tick === 60 && sameFrame.ticksDue === 0
+      && partTick.ticksDue === 1 && Math.abs(partTick.tickFraction - 0.5) < 1e-9
+      && noClock.ticksDue === 0 && noClock.tickFraction === 0,
+    `${firstFrame.ticksDue} ticks at 1000 ms, then ${partTick.ticksDue} at 1025 ms`);
 }
 
 /**

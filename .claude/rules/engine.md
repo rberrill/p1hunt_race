@@ -37,7 +37,9 @@ decision log).
 ## The design (decided 2026-11-01)
 
 - **Race time:** `CONFIG.ticksPerSecond` (60) ticks per second. `advanceTick(race)` is one tick,
-  in place; the shell calls it once per elapsed tick, however many a frame covers. Pause is
+  in place; the shell calls it once per elapsed tick, however many a frame covers:
+  `clockToTicks(race, raceClockMs)` turns the shell's race clock (playing time only) into the
+  ticks owed and the draw fraction, from the whole clock, so the ticks never drift. Pause is
   not ticking; Reset is `createRace` again. `runToFinish` is the reduced-motion mode's and the
   tests' way to the end.
 - **Randomness:** xoshiro128** seeded from FNV-1a of `seedText + ':' + purpose` through the
