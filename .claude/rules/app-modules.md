@@ -49,7 +49,9 @@ paths:
   engine its ticks), the frame loop, the countdown, Pause / Play / Reset, the tap-to-pause
   overlay (the bar's Pause or a tap on the stage pauses and shows Play, Reset race, Start over; `leaveRace` drops the
   race and `main.js` returns to Control with the seed kept), the hidden-tab pause, the HUD and the timing tower over the stage (`fitTower` trims it to what
-  fits, `towerMaxRows` at most, then "+ n more"; the gap is distance divided by the trailing car's speed), the finish hold, the reduced-motion reveal. Exports `runToEnd` and `frameAt` for the
+  fits, `towerMaxRows` at most, then "+ n more"; three major rows then half-width minor ones; refreshed
+  every `towerRefreshMs` with a green or red flash on a place gained or lost; the gap is distance
+  divided by the trailing car's speed), the finish hold, the reduced-motion reveal. Exports `runToEnd` and `frameAt` for the
   test hook. `startRace` resets the play state first: a race left mid-run (the test hook can do
   it) would otherwise leave `isPlaying` set and the new race would never get a frame.
 - `js/app/stage.js`: the canvas. The perspective road from `trackLayout`, the camera (follows the

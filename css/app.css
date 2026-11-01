@@ -429,6 +429,19 @@ input[type="range"] {
 }
 .tower-rows .is-leader { border-left-color: var(--accent); background: rgba(22, 22, 24, 0.9); }
 .tower-rows .is-leader .place { color: var(--accent); }
+/* Places 4 and down are the minor rows, about half as wide (Rich, 2026-11-01). */
+.tower-rows .is-minor { width: 55%; height: 24px; gap: 6px; font-size: 12px; }
+.tower-rows .is-minor .place { width: 1.5em; }
+.tower-rows .is-minor .swatch { height: 14px; }
+.tower-rows .is-minor .gap { font-size: 11px; }
+/* A place gained flashes green, a place lost red; the row fades back to its own background. */
+@keyframes tower-up { from { background-color: rgba(63, 185, 80, 0.85); } }
+@keyframes tower-down { from { background-color: rgba(229, 50, 45, 0.85); } }
+.tower-rows .is-up { animation: tower-up 900ms ease-out; }
+.tower-rows .is-down { animation: tower-down 900ms ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .tower-rows li { animation: none; }
+}
 .tower-more {
   margin: 0;
   padding: 3px 8px 3px 9px;
@@ -630,10 +643,20 @@ input[type="range"] {
   .hud-elapsed { font-size: 24px; }
   .hud-seed { font-size: 12px; }
   .race-bar .badge { display: none; }
-  .tower { top: 8px; bottom: 8px; left: 8px; width: 150px; max-width: 36%; }
+  /* Wider on the phone so a half-width minor row still has room for a name. */
+  .tower { top: 8px; bottom: 8px; left: 8px; width: 160px; max-width: 42%; }
   .tower-rows li { gap: 6px; height: 26px; padding: 0 6px 0 4px; font-size: 13px; }
   .tower-rows .swatch { height: 16px; }
   .tower-rows .gap { font-size: 11px; }
+  .tower-rows .is-minor {
+    width: 72%;
+    height: 21px;
+    gap: 4px;
+    padding: 0 5px 0 3px;
+    font-size: 11px;
+  }
+  .tower-rows .is-minor .swatch { height: 12px; }
+  .tower-rows .is-minor .gap { font-size: 10px; }
   .button-bar .btn { flex: 1 1 0; }
   /* The phone scrolls the Winner page; no row is squeezed. */
   .winner-grid {

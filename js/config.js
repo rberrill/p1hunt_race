@@ -6,7 +6,7 @@
 // what a car at cruise speed covers in one second, so a straight of 3 units is a 3 s straight.
 
 export const CONFIG = {
-  appVersion: '0.1.0-dev.10',
+  appVersion: '0.1.0-dev.11',
   storageKey: 'p1hunt.race.v1',
 
   // Race time (not overridable: it is the definition of race time)
@@ -63,6 +63,9 @@ export const CONFIG = {
   // The timing tower lists as many places as fit the stage, this many at most (Rich,
   // 2026-11-01: "the top X, whatever fits"; 20 is a full field)
   towerMaxRows: 20,
+  // The tower's places and gaps refresh this often, like a TV timing graphic, not every frame
+  // (Rich, 2026-11-01)
+  towerRefreshMs: 1500,
   reducedMotion: 0,
   saveDebounceMs: 300,
 };
@@ -96,5 +99,6 @@ export const CONFIG_LIMITS = {
   viewDepthUnits: [2, 20],
   labelMinWidthPx: [0, 200],
   towerMaxRows: [3, 100],
+  towerRefreshMs: [100, 5000],
   reducedMotion: [0, 1],
 };

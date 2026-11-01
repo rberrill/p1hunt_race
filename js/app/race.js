@@ -11,7 +11,7 @@ import {
   raceSnapshot,
   trackLayout,
   finishResult,
-} from '../engine.js?v=0.1.0-dev.10';
+} from '../engine.js?v=0.1.0-dev.11';
 import {
   app,
   byId,
@@ -21,7 +21,7 @@ import {
   announce,
   formatRaceTime,
   phoneMedia,
-} from './core.js?v=0.1.0-dev.10';
+} from './core.js?v=0.1.0-dev.11';
 import {
   initStage,
   resizeStage,
@@ -29,7 +29,7 @@ import {
   drawFrame,
   drawStill,
   carColor,
-} from './stage.js?v=0.1.0-dev.10';
+} from './stage.js?v=0.1.0-dev.11';
 
 // The timing tower and the HUD text are rewritten at most this often (frame time).
 const PANEL_INTERVAL_MS = 100;
@@ -42,6 +42,9 @@ const LIGHTS_LINGER_MS = 600;
 // at this (a track unit is one second at cruise, 1.0) so the launch never shows a huge gap.
 // Once both cars have crossed, the gap is the exact difference of their times.
 const GAP_SPEED_FLOOR = 0.5;
+// The first rows of the tower are full width; the rest are the half-width minor rows (Rich,
+// 2026-11-01: "only the top 3 need to be that big").
+const TOWER_MAJOR_ROWS = 3;
 // The tower's rows: place, swatch, name, gap.
 const ROW_SWATCH = 1;
 const ROW_NAME = 2;
@@ -50,9 +53,11 @@ const ROW_GAP = 3;
 let onRaceFinished = null;
 let frameHandle = 0;
 let panelDueMs = 0;
+let towerDueMs = 0;
 let announceDueMs = 0;
 let towerRows = [];
 let lastOrder = null;
+let lastPlaceOfCar = null;
 let revealedPlaces = 0;
 let lastDrawMs = 0;
 let onLeaveRace = null;
@@ -105,6 +110,7 @@ export function startRace(inputs) {
   app.finishedAtClockMs = null;
   setScene(trackLayout(app.race), app.race.displayNames, app.config);
   buildTower();
+  towerDueMs = 0;
   setText('hudSeed', app.race.seed);
   setText('hudElapsed', formatRaceTime(0, 1));
   showPhase('race');
@@ -292,6 +298,9 @@ function drawCurrentFrame(frameTimeMs, tickFraction = 0, clockMs = raceClockMs(f
   if (frameTimeMs >= panelDueMs) {
     panelDueMs = frameTimeMs + PANEL_INTERVAL_MS;
     updateHud(snapshot, frameTimeMs);
+  }
+  if (frameTimeMs >= towerDueMs) {
+    towerDueMs = frameTimeMs + app.config.towerRefreshMs;
     updateTower(snapshot);
   }
 }
@@ -331,16 +340,19 @@ function onFinishReached(clockMs) {
   const winner = app.race.displayNames[app.race.finishOrder[0]];
   announce(`Winner ${winner}`);
   byId('raceBadge').textContent = 'Finished';
+  // The final order and gaps show at once, whatever the refresh interval.
+  updateTower(raceSnapshot(app.race, 0));
 }
 
 /**
  * buildTower() → one row per place, reused for the whole race: place, a swatch in the car's
- * color, the name and the gap to the leader.
+ * color, the name and the gap to the leader. The first TOWER_MAJOR_ROWS are full width, the rest
+ * minor.
  */
 function buildTower() {
   towerRows = [];
   for (let i = 0; i < app.race.carCount; i++) {
-    towerRows.push(makeEl('li', null,
+    towerRows.push(makeEl('li', i < TOWER_MAJOR_ROWS ? null : { class: 'is-minor' },
       makeEl('span', { class: 'place' }, String(i + 1)),
       makeEl('span', { class: 'swatch' }, ''),
       makeEl('span', { class: 'name' }, ''),
@@ -348,6 +360,7 @@ function buildTower() {
   }
   byId('towerRows').replaceChildren(...towerRows);
   lastOrder = new Int32Array(app.race.carCount).fill(-1);
+  lastPlaceOfCar = new Int32Array(app.race.carCount).fill(-1);
   fitTower();
 }
 
@@ -367,6 +380,17 @@ function setTowerRow(i, car, gapText, isLeader) {
 }
 
 /**
+ * flashRow(row, className) → the row's background flashes green (`is-up`) or red (`is-down`)
+ * for a place gained or lost (Rich, 2026-11-01); the class is re-added so a second move
+ * restarts the animation.
+ */
+function flashRow(row, className) {
+  row.classList.remove('is-up', 'is-down');
+  void row.offsetWidth;
+  row.classList.add(className);
+}
+
+/**
  * finishedGapText(car, winner) → the gap column once a car has crossed: the winner's own time,
  * the others' exact gap to the winner.
  */
@@ -377,9 +401,11 @@ function finishedGapText(car, winner) {
 }
 
 /**
- * updateTower(snapshot) → every row follows the live order. The gap is blank before lights out
- * and on the leader's row; a running car shows its distance to the leader divided by its own
- * speed; a crossed car its exact gap to the winner (the winner, its time).
+ * updateTower(snapshot) → every row follows the live order, at the tower's refresh interval.
+ * The gap is blank before lights out and on the leader's row; a running car shows its distance
+ * to the leader divided by its own speed; a crossed car its exact gap to the winner (the
+ * winner, its time). A car that moved up since the last refresh flashes its row green, one
+ * that dropped flashes red.
  */
 function updateTower(snapshot) {
   const { order, leader } = snapshot;
@@ -387,6 +413,11 @@ function updateTower(snapshot) {
   const winner = app.race.finishOrder[0];
   for (let i = 0; i < towerRows.length; i++) {
     const car = order[i];
+    const lastPlace = lastPlaceOfCar[car];
+    if (isStarted && lastPlace >= 0 && lastPlace !== i) {
+      flashRow(towerRows[i], i < lastPlace ? 'is-up' : 'is-down');
+    }
+    lastPlaceOfCar[car] = i;
     let gapText = '';
     if (isStarted && app.race.place[car] > 0) {
       gapText = finishedGapText(car, winner);
