@@ -70,6 +70,7 @@ List in the proposal, for Rich to agree along with the ACs:
 ## At release (the `release` skill calls this)
 
 - Record Rich's sign-off and decision.
+- **The cross-device fingerprint is checked here**, by SP2 against SD2 on the live site, not reported after every change (Rich, 2026-11-01). A tuning change moves it; the constant in `selfTest()` moves with it, silently.
 - **Check the catalog:** every 🆕 and ✏️ row in the script is already in the catalog, worded the same (they went in with the script). Fix any drift; if the release drops a feature, delete its rows from the catalog.
 - If a smoke row found a real regression, or a step stops making sense, update `tests/uat/smoke.md` too.
 - Keep the smoke test short: one row per phase plus the iPhone-only and stream-only risks. About 15 rows per device is Claude's target, not Rich's; if it grows, propose what to drop.

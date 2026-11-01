@@ -15,7 +15,7 @@ Rich runs UAT only after this passes, so it must cover everything a browser can 
 | `js/engine.js` | 1, 2 (section 3's determinism rows at least), 3 |
 | `js/app/`, `index.html` | 1, 2 (the touched sections), 3 |
 | `css/` or anything that moves layout | 1, 2 (section 1 at all three sizes) |
-| Release preflight | Everything |
+| Release preflight | Everything, plus `?selftest=1` on the phone: the fingerprint equals the desktop's (the only time the number is reported; Rich, 2026-11-01) |
 
 ## Steps
 

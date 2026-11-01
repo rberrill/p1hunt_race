@@ -6,7 +6,7 @@
 // what a car at cruise speed covers in one second, so a straight of 3 units is a 3 s straight.
 
 export const CONFIG = {
-  appVersion: '0.1.0-dev.1',
+  appVersion: '0.1.0-dev.2',
   storageKey: 'p1hunt.race.v1',
 
   // Race time (not overridable: it is the definition of race time)
@@ -21,27 +21,29 @@ export const CONFIG = {
   maxSeedLength: 40,
 
   // Track: turns per 10 s of duration, the straights (a few long ones among short ones), the
-  // apex speed as a fraction of cruise, and the braking and exit zones around each apex
+  // apex speed as a fraction of cruise, and the braking and exit zones around each apex. The
+  // apex, zone, rate and spread values are Rich's pick (2026-11-01) from three measured presets:
+  // corners visibly slower and the pack visibly stretching, without doubling the tail
   turnsPerTenSecMin: 2,
   turnsPerTenSecMax: 3,
   longStraightsMin: 1,
   longStraightsMax: 3,
   longStraightRatio: 3,
   straightJitter: 0.25,
-  apexSpeedMin: 0.5,
-  apexSpeedMax: 0.75,
-  brakeZoneUnits: 0.5,
-  exitZoneUnits: 0.8,
+  apexSpeedMin: 0.35,
+  apexSpeedMax: 0.55,
+  brakeZoneUnits: 0.4,
+  exitZoneUnits: 1,
 
   // Cars: every car has the same base pace (not a tunable; Rich's decision). A launch factor,
   // speed checkpoints along each straight and a corner factor per turn (each a spread around
   // 1.0) are what set a car apart, and how fast speed can change
-  launchSpread: 0.1,
+  launchSpread: 0.15,
   checkpointsPerStraight: 3,
-  checkpointSpread: 0.06,
-  cornerSpread: 0.08,
-  accelerationPerSec: 0.8,
-  brakingPerSec: 2,
+  checkpointSpread: 0.12,
+  cornerSpread: 0.15,
+  accelerationPerSec: 0.6,
+  brakingPerSec: 3,
 
   // The shell and the stage: how the race is shown, never what it decides. Shell time, in the
   // units named. The countdown, the hold after the last car and the reduced-motion reveal are
