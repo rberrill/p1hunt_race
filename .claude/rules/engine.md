@@ -52,9 +52,12 @@ decision log).
   old seeds now give other races.
 - **Track (Rich):** 2 to 3 turns per 10 s of duration; 1 to 3 long straights among short
   ones (never more than half, Claude's call); each turn a seeded direction and apex speed with
-  fixed braking and exit zones. The straights scale so the nominal car (every factor 1.0)
-  crosses at the duration to within a tick; the finish line is where that car is at the last
-  tick.
+  fixed braking and exit zones. On a straight a car builds from cruise (1.0, the track unit)
+  toward `straightTopSpeed` at its acceleration rate and brakes from it into the next turn
+  (Rich, 2026-11-01: straights read as straights, and fast). The straights scale so the nominal
+  car (every factor 1.0) crosses at the duration to within a tick, the scale found by bisection
+  (Claude's call: a formula can't follow the speed profile); the finish line is where that car
+  is at the last tick.
 - **Cars (Rich):** the same base pace for every car, always (`BASE_PACE`, not a tunable); a
   standing start on one line, no grid rows (the stage may draw depth, the engine gives no head
   start); per car a launch factor, checkpoints along each straight and a corner

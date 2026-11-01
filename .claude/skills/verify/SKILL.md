@@ -23,7 +23,9 @@ Rich runs UAT only after this passes, so it must cover everything a browser can 
 2. **Behavior and layout:** `preview_start` with `race` (port 8768). Refresh the assets first (the `?v=` doesn't change during development; see [browser-recipes.md](browser-recipes.md)). Work through the relevant rows of [checks.md](checks.md) at **390×844**, then **375×667** when layout changed, then **1280×800**: the Finisher's three sizes (Rich, 2026-11-01). Measure (`scrollWidth`, `getBoundingClientRect`); don't eyeball. Screenshot once per size as proof, retaking any that come back tiled or stale.
    The browser pane gives animation frames only to the fronted tab: `tabs_select` the tab
    before timing a race, or the race never advances (a background tab also trips the app's
-   own hidden-tab pause). `frameAt` from the test hook is synchronous and needs no frames.
+   own hidden-tab pause). `frameAt` from the test hook is synchronous and needs no frames; use it whenever
+   `document.hidden` is true (the desktop app minimized or covered), when the app's own pause
+   holds every timed race.
 3. **Subfolder:** `preview_start` with `subfolder` (port 8772) and open `http://127.0.0.1:8772/p1hunt-race-new/index.html`, which stands in for Pages' `/p1hunt_race/` path. It loads styled, runs a race, and has no 404s in `read_network_requests`.
 4. **Clean up:** `localStorage.clear()` on the preview origin, and `resize_window` with preset `desktop`.
 

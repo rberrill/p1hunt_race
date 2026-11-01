@@ -5,7 +5,7 @@
 // max, imul and shifts), so the same inputs give the same finish on every device.
 //
 // Sections: RANDOM, TEXT, ENTRANTS, TRACK, RACE, RESULT, SANITIZERS, SELF-TEST.
-import { CONFIG, CONFIG_LIMITS } from './config.js?v=0.1.0-dev.2';
+import { CONFIG, CONFIG_LIMITS } from './config.js?v=0.1.0-dev.3';
 
 /* ==== RANDOM ==== */
 
@@ -329,10 +329,12 @@ export function displayNames(entrants) {
 const CRUISE_SPEED = 1;
 // Straights can't scale below this share of their drawn length, so a duration too short for
 // its turns still gives a track (the nominal time is then over the duration; a self-test
-// checks the stock config never gets there).
+// checks the stock config never gets there), nor above this multiple.
 const MIN_STRAIGHT_SCALE = 0.05;
-// Two passes of the straight scaling land the nominal car within a tick of the duration.
-const SCALING_PASSES = 2;
+const MAX_STRAIGHT_SCALE = 64;
+// The straight scale is found by bisection (the speed profile makes a formula inexact):
+// this many halvings of the scale range land the nominal car within a tick of the duration.
+const SCALING_PASSES = 40;
 
 /**
  * clamp(value, min, max) → value kept within [min, max].
@@ -422,28 +424,32 @@ function layoutTrack(shape, scale, config) {
     isLong: shape.isLong,
     totalUnits: position,
     finishUnits: position,
+    topSpeed: config.straightTopSpeed,
   };
 }
 
 /**
  * targetSpeedAt(track, distance, turnIndex) → the track's target speed at `distance`.
- * Cruise on a straight; falling linearly to the apex speed through the braking zone; rising
- * linearly back to cruise through the exit zone. `turnIndex` is the first turn the car has not
- * left yet (the caller keeps it current), and the next turn is checked too because a very short
- * straight lets two zones touch; the lower target wins.
+ * The top speed on a straight (a car builds toward it at its acceleration rate, so a short
+ * straight never gets there); falling linearly from the top speed to the apex speed through
+ * the braking zone; rising linearly back to cruise through the exit zone, after which the
+ * straight pulls the car on. `turnIndex` is the first turn the car has not left yet (the caller
+ * keeps it current), and the next turn is checked too because a very short straight lets two
+ * zones touch; the lower target wins.
  */
 function targetSpeedAt(track, distance, turnIndex) {
-  let target = CRUISE_SPEED;
+  const topSpeed = track.topSpeed;
+  let target = topSpeed;
   const last = Math.min(turnIndex + 1, track.turnCount - 1);
   for (let i = turnIndex; i <= last; i++) {
     const apexSpeed = track.apexSpeed[i];
-    let turnTarget = CRUISE_SPEED;
+    let turnTarget = topSpeed;
     if (distance >= track.exitEnd[i] || distance < track.brakeStart[i]) {
-      turnTarget = CRUISE_SPEED;
+      turnTarget = topSpeed;
     } else if (distance < track.apex[i]) {
       const brakeUnits = track.apex[i] - track.brakeStart[i];
       const brakeFraction = (distance - track.brakeStart[i]) / brakeUnits;
-      turnTarget = CRUISE_SPEED - (CRUISE_SPEED - apexSpeed) * brakeFraction;
+      turnTarget = topSpeed - (topSpeed - apexSpeed) * brakeFraction;
     } else {
       const exitFraction = (distance - track.apex[i]) / (track.exitEnd[i] - track.apex[i]);
       turnTarget = apexSpeed + (CRUISE_SPEED - apexSpeed) * exitFraction;
@@ -481,28 +487,41 @@ function runNominalCar(track, tickLimit, stopDistance, config) {
 }
 
 /**
+ * nominalTicks(shape, scale, config, tickLimit) → the ticks the nominal car needs to the end of
+ * the track laid out with the straights at `scale`, capped at `tickLimit`.
+ */
+function nominalTicks(shape, scale, config, tickLimit) {
+  const track = layoutTrack(shape, scale, config);
+  return runNominalCar(track, tickLimit, track.totalUnits, config).ticks;
+}
+
+/**
  * buildTrack(seedText, durationSec, config) → track.
  * The track for a seed and duration: the seeded shape, the straights scaled so the nominal
  * car's time matches the duration (the turn zones take what they take; the straights absorb
- * the rest, in two passes), then the finish line placed exactly where the nominal car is at
- * the duration's last tick.
+ * the rest), then the finish line placed exactly where the nominal car is at the duration's
+ * last tick. The scale is bisected: the smallest scale at which the nominal car is not early,
+ * within the bisection's precision, so the fit holds whatever the speed profile.
  */
 function buildTrack(seedText, durationSec, config) {
   const shape = drawTrackShape(seedText, durationSec, config);
   const durationTicks = Math.round(durationSec * config.ticksPerSecond);
-  let scale = 1;
-  let track = layoutTrack(shape, scale, config);
-  for (let pass = 0; pass < SCALING_PASSES; pass++) {
-    const nominal = runNominalCar(track, durationTicks * 10, track.totalUnits, config);
-    let straightUnits = 0;
-    for (let i = 0; i <= track.turnCount; i++) {
-      straightUnits += track.straightEnd[i] - track.straightStart[i];
-    }
-    const turnSec = nominal.ticks / config.ticksPerSecond - straightUnits / CRUISE_SPEED;
-    const wantedStraightSec = durationSec - turnSec;
-    scale *= Math.max(MIN_STRAIGHT_SCALE, wantedStraightSec / (straightUnits / CRUISE_SPEED));
-    track = layoutTrack(shape, scale, config);
+  const tickLimit = durationTicks * 10;
+  let low = MIN_STRAIGHT_SCALE;
+  let high = 1;
+  while (high < MAX_STRAIGHT_SCALE) {
+    if (nominalTicks(shape, high, config, tickLimit) >= durationTicks) break;
+    high *= 2;
   }
+  for (let pass = 0; pass < SCALING_PASSES; pass++) {
+    const middle = (low + high) / 2;
+    if (nominalTicks(shape, middle, config, tickLimit) < durationTicks) {
+      low = middle;
+    } else {
+      high = middle;
+    }
+  }
+  const track = layoutTrack(shape, high, config);
   const atDuration = runNominalCar(track, durationTicks, track.totalUnits * 2, config);
   track.finishUnits = Math.min(atDuration.distance, track.totalUnits);
   return track;
@@ -1159,7 +1178,7 @@ const LAST_CAR_LATEST_SHARE = 1.15;
 // proof that the engine's arithmetic is identical across engines; a tuning change moves it, and
 // that is a user-visible change (a new version), so the constant is updated with the version.
 const REFERENCE_SEED = 'P1HUNT';
-const REFERENCE_FINGERPRINT = 'b2ec4590';
+const REFERENCE_FINGERPRINT = 'c2b57b93';
 
 /**
  * testEntrants(count) → [{ name }], `count` distinct names.
@@ -1298,6 +1317,15 @@ function durationTests(check) {
   }
   check('Duration: the nominal car crosses at the duration to within a tick, past the last apex',
     isNominalOk, nominalDetail.join(', '));
+  const fastRace = raceFor(2, 'top-speed', 30);
+  let fastest = 0;
+  while (!fastRace.isFinished) {
+    advanceTick(fastRace);
+    fastest = Math.max(fastest, fastRace.speed[0]);
+  }
+  check('Track: a straight takes a car above cruise toward the top speed',
+    fastest > CRUISE_SPEED * 1.3 && fastest <= CONFIG.straightTopSpeed * 1.4,
+    `fastest ${fastest.toFixed(3)} of top ${CONFIG.straightTopSpeed}`);
   let winnerShareMin = Infinity;
   let winnerShareMax = 0;
   let lastShareMax = 0;
