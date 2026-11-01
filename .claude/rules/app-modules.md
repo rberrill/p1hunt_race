@@ -23,7 +23,9 @@ paths:
 - Touch first: every feature works by touch alone, with ≥ 44 px targets. Keyboard shortcuts
   are extras.
 - Drawing is driven by `requestAnimationFrame`, but the engine's race time advances only in its
-  own fixed steps; a frame never passes its delta into the physics (see `engine.md`).
+  own fixed steps; a frame never passes its delta into the physics (see `engine.md`). A hidden
+  tab (`visibilitychange`) pauses race time; on return the race resumes from the same tick and
+  never runs the missed ticks (Rich, 2026-11-01).
 
 ## Where things are
 
