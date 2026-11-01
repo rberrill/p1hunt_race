@@ -54,7 +54,8 @@ decision log).
   crosses at the duration to within a tick; the finish line is where that car is at the last
   tick.
 - **Cars (Rich):** the same base pace for every car, always (`BASE_PACE`, not a tunable); a
-  standing start; per car a launch factor, checkpoints along each straight and a corner
+  standing start on one line, no grid rows (the stage may draw depth, the engine gives no head
+  start); per car a launch factor, checkpoints along each straight and a corner
   factor per turn, each a spread around 1.0 from `CONFIG`. Speed moves toward target × factor
   by at most the acceleration or braking rate per tick.
 - **Finish (Rich):** every car crosses; the crossing time is the tick plus a linear sub-tick

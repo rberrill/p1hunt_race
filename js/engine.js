@@ -563,7 +563,8 @@ function drawCarCheckpoints(seedText, carIndex, track, config) {
  * drawLanes(seedText, carCount) → Float64Array of lane positions in [-1, 1].
  * Evenly spaced lanes across the road, dealt to the cars in a seeded order ('lanes' stream, a
  * Fisher–Yates shuffle). Cosmetic: the lane is where the stage draws the car; it never changes
- * the race.
+ * the race. Every car starts on one line at distance 0, no grid rows (Rich's decision,
+ * 2026-11-01), so the lane is the only thing that tells cars apart at the start.
  */
 function drawLanes(seedText, carCount) {
   const random = createRandom(seedText, 'lanes');
