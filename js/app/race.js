@@ -11,7 +11,7 @@ import {
   raceSnapshot,
   trackLayout,
   finishResult,
-} from '../engine.js?v=0.1.0-dev.8';
+} from '../engine.js?v=0.1.0-dev.9';
 import {
   app,
   byId,
@@ -21,8 +21,8 @@ import {
   announce,
   formatRaceTime,
   phoneMedia,
-} from './core.js?v=0.1.0-dev.8';
-import { initStage, resizeStage, setScene, drawFrame, drawStill } from './stage.js?v=0.1.0-dev.8';
+} from './core.js?v=0.1.0-dev.9';
+import { initStage, resizeStage, setScene, drawFrame, drawStill } from './stage.js?v=0.1.0-dev.9';
 
 // The live order panel and the HUD text are rewritten at most this often (frame time).
 const PANEL_INTERVAL_MS = 100;
@@ -39,25 +39,24 @@ let orderItems = [];
 let lastOrder = null;
 let revealedPlaces = 0;
 let lastDrawMs = 0;
+let onLeaveRace = null;
 
 /**
- * initRace({ onFinished }) → wires the phase once. `onFinished(result)` runs when the Winner
- * screen is due.
+ * initRace({ onFinished, onLeave }) → wires the phase once. `onFinished(result)` runs when the
+ * Winner screen is due; `onLeave()` when the breaker takes Start over from the overlay.
  */
 export function initRace(options) {
   onRaceFinished = options.onFinished;
+  onLeaveRace = options.onLeave;
   initStage(byId('stage'));
   byId('btnPause').addEventListener('click', togglePause);
   byId('btnReset').addEventListener('click', resetRace);
-  byId('overlayPause').addEventListener('click', () => {
-    hideOverlay();
-    togglePause();
-  });
+  byId('overlayPause').addEventListener('click', togglePause);
   byId('overlayReset').addEventListener('click', () => {
     hideOverlay();
     resetRace();
   });
-  byId('overlayStay').addEventListener('click', hideOverlay);
+  byId('overlayStartOver').addEventListener('click', () => onLeaveRace());
   byId('stage').addEventListener('pointerdown', pauseAndShowOverlay);
   byId('stageOverlay').addEventListener('pointerdown', event => {
     if (event.target === event.currentTarget) hideOverlay();
@@ -138,13 +137,14 @@ export function pauseRace() {
 }
 
 /**
- * togglePause() → Pause or Play, from the bar or the overlay.
+ * togglePause() → the bar's Pause / Play button and Space: a pause brings up the overlay, the
+ * same as a tap on the stage (Rich, 2026-11-01); Play clears it and runs the race on.
  */
 export function togglePause() {
   if (app.isPlaying) {
-    pauseRace();
-    app.clock.isHiddenPause = false;
+    pauseAndShowOverlay();
   } else {
+    hideOverlay();
     playRace();
   }
 }
@@ -158,6 +158,20 @@ export function resetRace() {
   startRace(app.raceInputs);
   pauseRace();
   drawCurrentFrame(performance.now());
+}
+
+/**
+ * leaveRace() → the race is abandoned: the frame loop stops, the overlay clears and the race is
+ * dropped, so nothing draws or finishes after Control is back. Entrants, seed and duration are
+ * untouched; Start race runs the identical race (Rich, 2026-11-01).
+ */
+export function leaveRace() {
+  stopFrames();
+  hideOverlay();
+  app.isPlaying = false;
+  app.clock.resumedAtMs = null;
+  app.finishedAtClockMs = null;
+  app.race = null;
 }
 
 /**
@@ -389,7 +403,7 @@ function onStageResize() {
 
 /**
  * pauseAndShowOverlay() → a tap on the stage pauses the race at once and dims the stage with the
- * controls large: Play, Reset race, Stay paused (Rich, 2026-11-01: a tap is a pause, never a
+ * controls large: Play, Reset race, Start over (Rich, 2026-11-01: a tap is a pause, never a
  * race running on behind a dimmed stage). The overlay stays until a button or a tap outside it;
  * a tap outside leaves the race paused with the stage clear, the bar showing Play.
  */

@@ -1,7 +1,7 @@
 // The entry module: link settings, the saved session, the three phases wired into their loop
 // (Control → Race → Winner → Control), the self-test runner and the test hook. init() runs last.
-import { CONFIG } from '../config.js?v=0.1.0-dev.8';
-import { sanitizeOverrides, selfTest } from '../engine.js?v=0.1.0-dev.8';
+import { CONFIG } from '../config.js?v=0.1.0-dev.9';
+import { sanitizeOverrides, selfTest } from '../engine.js?v=0.1.0-dev.9';
 import {
   app,
   byId,
@@ -11,13 +11,13 @@ import {
   hideCard,
   renderTunedChips,
   files,
-} from './core.js?v=0.1.0-dev.8';
+} from './core.js?v=0.1.0-dev.9';
 import {
   loadStoredSession,
   saveSessionNow,
   clearStoredSession,
   offerResume,
-} from './session.js?v=0.1.0-dev.8';
+} from './session.js?v=0.1.0-dev.9';
 import {
   initControl,
   setEntrantsText,
@@ -29,17 +29,18 @@ import {
   showBackLine,
   importCsvText,
   entrantCount,
-} from './control.js?v=0.1.0-dev.8';
+} from './control.js?v=0.1.0-dev.9';
 import {
   initRace,
   startRace,
+  leaveRace,
   pauseRace,
   playRace,
   resetRace,
   runToEnd,
   frameAt,
-} from './race.js?v=0.1.0-dev.8';
-import { initWinner, showWinner, setRerunNote } from './winner.js?v=0.1.0-dev.8';
+} from './race.js?v=0.1.0-dev.9';
+import { initWinner, showWinner, setRerunNote } from './winner.js?v=0.1.0-dev.9';
 
 // Link keys the shell uses itself; they are not settings and are not reported as ignored.
 const SHELL_LINK_KEYS = new Set(['selftest']);
@@ -130,6 +131,19 @@ function onStartOver() {
 }
 
 /**
+ * onLeaveRace() → Start over from the race overlay: back to Control with the list, the seed and
+ * its lock state kept, so Start race runs the identical race (Rich, 2026-11-01: leaving a race
+ * can never change its result; the Winner screen's Start over is the one that draws a new seed).
+ */
+function onLeaveRace() {
+  leaveRace();
+  showBackLine(`Race left before the finish · same ${entrantCount()} entrants`
+    + ` · same seed ${app.seed} · Start race runs the identical race`);
+  showPhase('control');
+  refreshControl();
+}
+
+/**
  * restoreSession(session) → Resume: the saved list, seed and duration come back; the back line
  * says who won last, and warns when the record is from another app version (Rich, 2026-11-01:
  * it still runs).
@@ -178,7 +192,7 @@ function init() {
   applyLinkSettings();
   initCard();
   initControl({ onStart: onStartRace });
-  initRace({ onFinished: onRaceFinished });
+  initRace({ onFinished: onRaceFinished, onLeave: onLeaveRace });
   initWinner({ onRerun, onStartOver });
   if (app.overrides.durationSec !== undefined) {
     byId('durationInput').value = String(app.overrides.durationSec);
@@ -208,6 +222,7 @@ function init() {
     runToEnd,
     rerun: onRerun,
     startOver: onStartOver,
+    leaveRace: onLeaveRace,
     finishOrder: () => (app.race ? app.race.finishOrder.slice() : []),
     finishResult: () => app.lastResult,
     restoreSession,
