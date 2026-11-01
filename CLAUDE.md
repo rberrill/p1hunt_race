@@ -64,7 +64,7 @@ All from the product definition, decided with Rich on 2026-11-01 unless marked o
 
 **Branches:**
 - `main` holds all work. Commit and push it as you go; that never changes the live site.
-- `release` is what Pages serves. Never commit to it. Only the `release` skill moves it, and only to a release tag (rollback moves it back one tag). It was created at the scaffold commit so Pages could be set up before the first release.
+- `release` is what Pages serves. Never commit to it. Only the `release` skill moves it, and only to a release tag (rollback moves it back one tag). It was created at the scaffold commit so Pages could be set up before the first release. GitHub rulesets block deleting or force-pushing `main` and `release` and moving or deleting a pushed `v*` tag, with **no standing bypass**: for a rollback Rich adds Repository admin to the `release` ruleset's bypass list and removes it after (Rich, 2026-11-01).
 - `fix/<name>`, from the live tag, is only for a hotfix while `main` has unreleased work.
 - Releases are annotated tags on `main` (`vX.Y.Z`). Moving `release` needs Rich's go-ahead.
 - Commits end with the `Co-Authored-By` trailer.
