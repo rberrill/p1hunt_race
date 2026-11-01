@@ -33,9 +33,9 @@ export const CONFIG = {
   brakeZoneUnits: 0.5,
   exitZoneUnits: 0.8,
 
-  // Cars: a base pace per car, a launch factor, speed checkpoints along each straight and a
-  // corner factor per turn (each a spread around 1.0), and how fast speed can change
-  paceSpread: 0.02,
+  // Cars: every car has the same base pace (not a tunable; Rich's decision). A launch factor,
+  // speed checkpoints along each straight and a corner factor per turn (each a spread around
+  // 1.0) are what set a car apart, and how fast speed can change
   launchSpread: 0.1,
   checkpointsPerStraight: 3,
   checkpointSpread: 0.06,
@@ -57,7 +57,6 @@ export const CONFIG_LIMITS = {
   apexSpeedMax: [0.2, 0.95],
   brakeZoneUnits: [0.1, 3],
   exitZoneUnits: [0.1, 3],
-  paceSpread: [0, 0.2],
   launchSpread: [0, 0.5],
   checkpointsPerStraight: [1, 8],
   checkpointSpread: [0, 0.3],

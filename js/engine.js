@@ -511,18 +511,22 @@ function buildTrack(seedText, durationSec, config) {
 
 // A crossed car's order key sits above any distance, highest place first.
 const CROSSED_ORDER_BASE = 1e9;
+// Every car's base pace, as a factor on the track's target speed: the same for all, always
+// (Rich's decision, 2026-11-01). Only the seeded checkpoints along the road set a car apart.
+const BASE_PACE = 1;
 
 /**
  * drawCarCheckpoints(seedText, carIndex, track, config) → { distance, factor } (Float64Arrays).
- * A car's speed factors along the road, from its own 'car:<index>' stream: a base pace, a
- * launch factor at the start line, checkpoints along each straight (within the straight, in
- * distance order) and a corner factor at each turn's braking point. The factor set at a
- * checkpoint holds until the next one, so every car runs the same rules and its race comes
- * out of these draws. The last draw is the car's tiebreak for a dead heat.
+ * A car's speed factors along the road, from its own 'car:<index>' stream: a launch factor at
+ * the start line, checkpoints along each straight (within the straight, in distance order) and
+ * a corner factor at each turn's braking point. Every car has the same base pace (Rich's
+ * decision, 2026-11-01: nothing is fixed before the start); the factor set at a checkpoint
+ * holds until the next one, so each car's race comes out of these draws alone. The last draw
+ * is the car's tiebreak for a dead heat.
  */
 function drawCarCheckpoints(seedText, carIndex, track, config) {
   const random = createRandom(seedText, `car:${carIndex}`);
-  const pace = 1 + random.nextBetween(-config.paceSpread, config.paceSpread);
+  const pace = BASE_PACE;
   const perStraight = Math.max(1, Math.round(config.checkpointsPerStraight));
   const count = 1 + (track.turnCount + 1) * perStraight + track.turnCount;
   const distance = new Float64Array(count);
@@ -1121,7 +1125,7 @@ const LAST_CAR_LATEST_SHARE = 1.15;
 // proof that the engine's arithmetic is identical across engines; a tuning change moves it, and
 // that is a user-visible change (a new version), so the constant is updated with the version.
 const REFERENCE_SEED = 'P1HUNT';
-const REFERENCE_FINGERPRINT = 'edd3b33f';
+const REFERENCE_FINGERPRINT = '7945c9d9';
 
 /**
  * testEntrants(count) → [{ name }], `count` distinct names.
@@ -1395,16 +1399,16 @@ function sanitizerTests(check) {
   const link = sanitizeOverrides([
     ['durationSec', '45'],
     ['durationSec2', '45'],
-    ['paceSpread', '9'],
-    ['cornerSpread', '<b>x</b>'],
+    ['cornerSpread', '9'],
+    ['checkpointSpread', '<b>x</b>'],
     ['appVersion', '9.9.9'],
     ['ticksPerSecond', '1'],
   ]);
   check('Sanitize: link settings apply only known numeric keys within their limits',
-    link.config.durationSec === 45 && link.config.paceSpread === 0.2
+    link.config.durationSec === 45 && link.config.cornerSpread === 0.3
       && link.config.appVersion === CONFIG.appVersion && link.config.ticksPerSecond === 60
       && link.ignored.length === 4
-      && Object.keys(link.overrides).join(',') === 'durationSec,paceSpread',
+      && Object.keys(link.overrides).join(',') === 'durationSec,cornerSpread',
     link.ignored.join('; '));
   const stored = sanitizeStoredSession(JSON.stringify({
     version: 'x',
