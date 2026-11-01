@@ -107,7 +107,8 @@ function createRandom(seedText, purpose) {
 // Control characters, which never belong in a name or a seed (C0, DEL and C1).
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f-\u009f]/g;
 // The seed alphabet: 32 characters, none of 0 O 1 I, so a seed reads back from a stream
-// without ambiguity (Claude's call). 32 divides 256, so a byte modulo 32 is uniform.
+// without ambiguity; two groups of four (Rich's decision, 2026-11-01). 32 divides 256, so a
+// byte modulo 32 is uniform.
 const SEED_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
 const SEED_GROUP_LENGTH = 4;
 const SEED_BYTES = 8;
