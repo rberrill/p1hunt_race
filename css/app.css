@@ -533,7 +533,9 @@ input[type="range"] {
   line-height: 1.05;
   letter-spacing: 0.02em;
   text-transform: uppercase;
-  overflow-wrap: anywhere;
+  /* One line always; the script sizes the font to the width (Rich, 2026-11-01). */
+  white-space: nowrap;
+  overflow: hidden;
 }
 .hero-line { color: var(--muted); font-size: 14px; }
 .winner-actions {

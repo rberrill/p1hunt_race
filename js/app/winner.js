@@ -1,8 +1,8 @@
 // The Winner phase: the winner large, the full finish order with times, the exports (CSV, JSON,
 // Copy result where the clipboard exists) and the two ways out: Re-run this race (identical
 // result) and Start over (list kept, new seed).
-import { CONFIG } from '../config.js?v=0.1.0-dev.12';
-import { resultToCsv, resultToJson } from '../engine.js?v=0.1.0-dev.12';
+import { CONFIG } from '../config.js?v=0.1.0-dev.13';
+import { resultToCsv, resultToJson } from '../engine.js?v=0.1.0-dev.13';
 import {
   app,
   byId,
@@ -14,14 +14,16 @@ import {
   formatSavedAt,
   fileStamp,
   phoneMedia,
-} from './core.js?v=0.1.0-dev.12';
+} from './core.js?v=0.1.0-dev.13';
 
 // The phone shows this many places before "Show all" (from the wireframe).
 const PHONE_FINISH_PREVIEW = 8;
-// The winner's name is sized to the hero's width: the font size is the width over the name's
-// length times this factor (a heavy sans averages about 0.6 em per character), within bounds.
-const NAME_WIDTH_PER_CHARACTER = 0.62;
-const NAME_FONT_MIN_PX = 28;
+// The winner's name is sized to the hero's width on one line, never wrapped (Rich, 2026-11-01):
+// it is measured at the probe size and scaled to fit, within bounds. The floor is low because a
+// 40-character name on a phone has to get small to stay on one line (measured: 40 wide
+// characters need 10 px in a 307 px hero; the box clips below that rather than wrap).
+const NAME_PROBE_PX = 100;
+const NAME_FONT_MIN_PX = 10;
 const NAME_FONT_MAX_PX = 112;
 
 let isFinishExpanded = false;
@@ -92,16 +94,22 @@ function renderFinishOrder() {
 }
 
 /**
- * fitWinnerName() → sizes the winner's name to the hero's width, so a 40-character name still
- * fits and a short one is as large as the space allows.
+ * fitWinnerName() → sizes the winner's name to the hero's width on one line: the name is
+ * measured at the probe size, then scaled so its real width fits, so a 40-character name still
+ * fits and a short one is as large as the space allows. The element is `nowrap`, so the
+ * measure is the whole name.
  */
 function fitWinnerName() {
   const nameEl = byId('winnerName');
   const width = nameEl.parentElement.clientWidth - 32;
-  const length = Math.max(3, nameEl.textContent.length);
+  nameEl.style.fontSize = `${NAME_PROBE_PX}px`;
+  // A Range measures the text itself; the element's own width never drops below its box.
+  const range = document.createRange();
+  range.selectNodeContents(nameEl);
+  const probeWidth = Math.max(1, range.getBoundingClientRect().width);
   const fontPx = Math.min(
     NAME_FONT_MAX_PX,
-    Math.max(NAME_FONT_MIN_PX, width / (length * NAME_WIDTH_PER_CHARACTER)),
+    Math.max(NAME_FONT_MIN_PX, (NAME_PROBE_PX * width) / probeWidth),
   );
   nameEl.style.fontSize = `${Math.floor(fontPx)}px`;
 }
