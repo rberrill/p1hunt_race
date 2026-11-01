@@ -230,11 +230,13 @@ textarea, input[type="text"] {
   background: var(--bg);
   color: var(--text);
 }
+/* Every text control is 16 px or more: iOS Safari zooms the page in to focus a smaller one
+   and never zooms back out, so every phase then hangs past the screen's edges. */
 textarea {
   flex: 1 1 auto;
   min-height: 220px;
   resize: vertical;
-  font: 15px/1.5 ui-monospace, Menlo, Consolas, monospace;
+  font: 16px/1.5 ui-monospace, Menlo, Consolas, monospace;
 }
 input[type="text"] { font: 16px/1.2 ui-monospace, Menlo, Consolas, monospace; }
 textarea:focus, input:focus, .btn:focus-visible, .tab:focus-visible {
