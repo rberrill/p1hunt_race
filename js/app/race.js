@@ -11,7 +11,7 @@ import {
   raceSnapshot,
   trackLayout,
   finishResult,
-} from '../engine.js?v=0.1.0-dev.17';
+} from '../engine.js?v=0.1.0-dev.18';
 import {
   app,
   byId,
@@ -21,7 +21,7 @@ import {
   announce,
   formatRaceTime,
   phoneMedia,
-} from './core.js?v=0.1.0-dev.17';
+} from './core.js?v=0.1.0-dev.18';
 import {
   initStage,
   resizeStage,
@@ -29,7 +29,7 @@ import {
   drawFrame,
   drawStill,
   carColor,
-} from './stage.js?v=0.1.0-dev.17';
+} from './stage.js?v=0.1.0-dev.18';
 
 // The timing tower and the HUD text are rewritten at most this often (frame time).
 const PANEL_INTERVAL_MS = 100;
@@ -454,7 +454,7 @@ function updateTower(snapshot) {
 }
 
 /**
- * fitTower() → shows as many places as fit the tower's height, towerMaxRows at most, hiding
+ * fitTower() → shows as many places as fit the tower's height (towerMaxRows at most), hiding
  * from the end until nothing overflows, then "+ n more".
  */
 function fitTower() {
