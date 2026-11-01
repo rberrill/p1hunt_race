@@ -312,21 +312,41 @@ function fillStrip(leftNear, rightNear, yNear, leftFar, rightFar, yFar, color) {
 }
 
 /**
+ * fadedColor(hex, fade) → a '#rrggbb' colour mixed toward the verge by `fade` (0 keeps it, 1 is
+ * the verge), as an rgb() string. Opaque fills, never alpha: an alpha fill over the fill below
+ * it lets that one show through, and the kerb red bled onto the tarmac (found on the phone,
+ * 2026-11-01).
+ */
+function fadedColor(hex, fade) {
+  const red = parseInt(hex.slice(1, 3), 16);
+  const green = parseInt(hex.slice(3, 5), 16);
+  const blue = parseInt(hex.slice(5, 7), 16);
+  const vergeRed = parseInt(COLOR_VERGE.slice(1, 3), 16);
+  const vergeGreen = parseInt(COLOR_VERGE.slice(3, 5), 16);
+  const vergeBlue = parseInt(COLOR_VERGE.slice(5, 7), 16);
+  const mixedRed = Math.round(red + (vergeRed - red) * fade);
+  const mixedGreen = Math.round(green + (vergeGreen - green) * fade);
+  const mixedBlue = Math.round(blue + (vergeBlue - blue) * fade);
+  return `rgb(${mixedRed}, ${mixedGreen}, ${mixedBlue})`;
+}
+
+/**
  * drawRoad() → the road from the bottom edge to its far end, strip by strip: tarmac in two
- * alternating shades, red and white kerbs and the centre dashes, all repeating by track
- * position so they scroll as the camera moves. The last ROAD_FADE_FRACTION of the strips fade
- * into the verge, so the road rolls off at a vanishing point.
+ * alternating shades, red and white kerbs beside it (never under it) and the centre dashes,
+ * all repeating by track position so they scroll as the camera moves. Strip edges sit on
+ * whole pixels so no seam shows between strips. The last ROAD_FADE_FRACTION of the strips are
+ * mixed toward the verge, so the road rolls off at a vanishing point.
  */
 function drawRoad() {
   const halfNear = roadHalfWidthNearPx();
   const fadeStart = ROAD_STRIPS * (1 - ROAD_FADE_FRACTION);
-  const { ctx } = view;
   for (let i = 0; i < ROAD_STRIPS; i++) {
-    ctx.globalAlpha = i < fadeStart ? 1 : 1 - (i - fadeStart) / (ROAD_STRIPS - fadeStart);
+    const fade = i < fadeStart ? 0 : (i - fadeStart) / (ROAD_STRIPS - fadeStart);
     const scaleNear = strips.scale[i];
     const scaleFar = strips.scale[i + 1];
-    const yNear = screenYAt(scaleNear) + 1;
-    const yFar = screenYAt(scaleFar);
+    const yNear = Math.round(screenYAt(scaleNear));
+    const yFar = Math.round(screenYAt(scaleFar));
+    if (yFar >= yNear) continue;
     const centreNear = roadCentreXAt(scaleNear, strips.lateral[i]);
     const centreFar = roadCentreXAt(scaleFar, strips.lateral[i + 1]);
     const halfWidthNear = halfNear * scaleNear;
@@ -336,15 +356,23 @@ function drawRoad() {
     const isEvenKerb = Math.floor(trackUnits / KERB_UNITS) % 2 === 0;
     const kerbNear = halfWidthNear * KERB_WIDTH_FRACTION;
     const kerbFar = halfWidthFar * KERB_WIDTH_FRACTION;
+    const kerbColor = fadedColor(isEvenKerb ? COLOR_KERB_RED : COLOR_KERB_WHITE, fade);
+    // Each kerb reaches one pixel under the tarmac's edge, so the slanted join never shows
+    // the verge through its anti-aliasing.
     fillStrip(
-      centreNear - halfWidthNear - kerbNear, centreNear + halfWidthNear + kerbNear, yNear,
-      centreFar - halfWidthFar - kerbFar, centreFar + halfWidthFar + kerbFar, yFar,
-      isEvenKerb ? COLOR_KERB_RED : COLOR_KERB_WHITE,
+      centreNear - halfWidthNear - kerbNear, centreNear - halfWidthNear + 1, yNear,
+      centreFar - halfWidthFar - kerbFar, centreFar - halfWidthFar + 1, yFar,
+      kerbColor,
+    );
+    fillStrip(
+      centreNear + halfWidthNear - 1, centreNear + halfWidthNear + kerbNear, yNear,
+      centreFar + halfWidthFar - 1, centreFar + halfWidthFar + kerbFar, yFar,
+      kerbColor,
     );
     fillStrip(
       centreNear - halfWidthNear, centreNear + halfWidthNear, yNear,
       centreFar - halfWidthFar, centreFar + halfWidthFar, yFar,
-      isEvenRoad ? COLOR_ROAD_A : COLOR_ROAD_B,
+      fadedColor(isEvenRoad ? COLOR_ROAD_A : COLOR_ROAD_B, fade),
     );
     if (isEvenRoad) {
       const dashNear = halfWidthNear * DASH_WIDTH_FRACTION;
@@ -352,11 +380,10 @@ function drawRoad() {
       fillStrip(
         centreNear - dashNear, centreNear + dashNear, yNear,
         centreFar - dashFar, centreFar + dashFar, yFar,
-        COLOR_LINE,
+        fadedColor(COLOR_LINE, fade),
       );
     }
   }
-  ctx.globalAlpha = 1;
 }
 
 /**
