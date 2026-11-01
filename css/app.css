@@ -429,11 +429,22 @@ input[type="range"] {
 }
 .tower-rows .is-leader { border-left-color: var(--accent); background: rgba(22, 22, 24, 0.9); }
 .tower-rows .is-leader .place { color: var(--accent); }
-/* Places 4 and down are the minor rows, about half as wide (Rich, 2026-11-01). */
-.tower-rows .is-minor { width: 55%; height: 24px; gap: 6px; font-size: 12px; }
+/* Places 4 and down are the minor rows: the same information at about two thirds the size, the
+   full name never cut, the gap right beside it, each row as wide as its text (Rich,
+   2026-11-01: smaller, never less). Literally half the font would be 7 px, unreadable on
+   stream, so two thirds (Claude's call). */
+.tower-rows .is-minor {
+  width: max-content;
+  max-width: 100%;
+  height: 20px;
+  gap: 5px;
+  padding: 0 7px 0 5px;
+  font-size: 10px;
+}
 .tower-rows .is-minor .place { width: 1.5em; }
-.tower-rows .is-minor .swatch { height: 14px; }
-.tower-rows .is-minor .gap { font-size: 11px; }
+.tower-rows .is-minor .swatch { width: 4px; height: 12px; }
+.tower-rows .is-minor .name { flex: 0 1 auto; }
+.tower-rows .is-minor .gap { font-size: 10px; }
 /* A place gained flashes green, a place lost red; the row fades back to its own background. */
 @keyframes tower-up { from { background-color: rgba(63, 185, 80, 0.85); } }
 @keyframes tower-down { from { background-color: rgba(229, 50, 45, 0.85); } }
@@ -648,15 +659,9 @@ input[type="range"] {
   .tower-rows li { gap: 6px; height: 26px; padding: 0 6px 0 4px; font-size: 13px; }
   .tower-rows .swatch { height: 16px; }
   .tower-rows .gap { font-size: 11px; }
-  .tower-rows .is-minor {
-    width: 72%;
-    height: 21px;
-    gap: 4px;
-    padding: 0 5px 0 3px;
-    font-size: 11px;
-  }
-  .tower-rows .is-minor .swatch { height: 12px; }
-  .tower-rows .is-minor .gap { font-size: 10px; }
+  .tower-rows .is-minor { height: 17px; gap: 4px; padding: 0 5px 0 3px; font-size: 9px; }
+  .tower-rows .is-minor .swatch { height: 10px; }
+  .tower-rows .is-minor .gap { font-size: 9px; }
   .button-bar .btn { flex: 1 1 0; }
   /* The phone scrolls the Winner page; no row is squeezed. */
   .winner-grid {

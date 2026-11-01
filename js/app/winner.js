@@ -1,8 +1,8 @@
 // The Winner phase: the winner large, the full finish order with times, the exports (CSV, JSON,
 // Copy result where the clipboard exists) and the two ways out: Re-run this race (identical
 // result) and Start over (list kept, new seed).
-import { CONFIG } from '../config.js?v=0.1.0-dev.11';
-import { resultToCsv, resultToJson } from '../engine.js?v=0.1.0-dev.11';
+import { CONFIG } from '../config.js?v=0.1.0-dev.12';
+import { resultToCsv, resultToJson } from '../engine.js?v=0.1.0-dev.12';
 import {
   app,
   byId,
@@ -14,7 +14,7 @@ import {
   formatSavedAt,
   fileStamp,
   phoneMedia,
-} from './core.js?v=0.1.0-dev.11';
+} from './core.js?v=0.1.0-dev.12';
 
 // The phone shows this many places before "Show all" (from the wireframe).
 const PHONE_FINISH_PREVIEW = 8;
@@ -56,7 +56,9 @@ export function initWinner(options) {
 export function showWinner() {
   const result = app.lastResult;
   const winner = result.places[0];
-  setText('winnerName', winner.displayName);
+  // The hero names who won, so the plain name; the finish order keeps the -1, -2 suffix that
+  // tells repeated names apart (Rich, 2026-11-01).
+  setText('winnerName', winner.name);
   const time = winner.timeSec === null ? 'no time' : formatRaceTime(winner.timeSec, 1);
   setText('winnerLine', `Checkered flag at ${time} · ${result.entrantCount} racers`
     + ` · seed ${result.seed}`);
