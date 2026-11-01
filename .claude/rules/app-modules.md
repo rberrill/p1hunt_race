@@ -31,7 +31,7 @@ paths:
 
 - `js/config.js`: `CONFIG` (every tunable, `appVersion`, `storageKey`) and `CONFIG_LIMITS` (the
   link-overridable keys with their ranges). The shell's tunables (`startCountdownSec`,
-  `finishHoldMs`, `revealSec`, `overlayHideMs`, `maxFrameGapMs`, the camera's units,
+  `finishHoldMs`, `revealSec`, `maxFrameGapMs`, the camera's units,
   `labelMinWidthPx`, `reducedMotion`, `saveDebounceMs`) sit after the engine's.
 - `js/app/main.js`: the entry. Link settings through `sanitizeOverrides`; the saved session and
   the Resume card; the phase loop (Start race → the race → the record saved → the Winner screen →
@@ -46,8 +46,8 @@ paths:
   then Show all); the Clear confirmation card; the seed (New, Locked / Unlocked); the duration
   slider; the Start race gate and its message.
 - `js/app/race.js`: the Race phase. The race clock (playing time only; `clockToTicks` owes the
-  engine its ticks), the frame loop, the countdown, Pause / Play / Reset, the tapped-stage
-  overlay, the hidden-tab pause, the HUD and the live order panel (trimmed to what fits, "+ n
+  engine its ticks), the frame loop, the countdown, Pause / Play / Reset, the tap-to-pause
+  overlay (a tap on the stage pauses and shows Play, Reset race, Stay paused), the hidden-tab pause, the HUD and the live order panel (trimmed to what fits, "+ n
   more"), the finish hold, the reduced-motion reveal. Exports `runToEnd` and `frameAt` for the
   test hook. `startRace` resets the play state first: a race left mid-run (the test hook can do
   it) would otherwise leave `isPlaying` set and the new race would never get a frame.

@@ -1,6 +1,6 @@
 // The Race phase: Start race builds the race, a race clock in wall time (playing time only)
 // drives the engine through clockToTicks, and each frame draws a snapshot. Pause and Play, Reset,
-// the hidden-tab pause, the HUD, the live order panel, the button bar, the tapped-stage overlay,
+// the hidden-tab pause, the HUD, the live order panel, the button bar, the tap-to-pause overlay,
 // the finish hold and the reduced-motion reveal all live here. The frame rate only decides how
 // often the clock is read; a frame's delta never reaches the physics.
 import {
@@ -11,7 +11,7 @@ import {
   raceSnapshot,
   trackLayout,
   finishResult,
-} from '../engine.js?v=0.1.0-dev.4';
+} from '../engine.js?v=0.1.0-dev.5';
 import {
   app,
   byId,
@@ -21,8 +21,8 @@ import {
   announce,
   formatRaceTime,
   phoneMedia,
-} from './core.js?v=0.1.0-dev.4';
-import { initStage, resizeStage, setScene, drawFrame, drawStill } from './stage.js?v=0.1.0-dev.4';
+} from './core.js?v=0.1.0-dev.5';
+import { initStage, resizeStage, setScene, drawFrame, drawStill } from './stage.js?v=0.1.0-dev.5';
 
 // The live order panel and the HUD text are rewritten at most this often (frame time).
 const PANEL_INTERVAL_MS = 100;
@@ -33,7 +33,6 @@ const LIGHTS_LINGER_MS = 600;
 
 let onRaceFinished = null;
 let frameHandle = 0;
-let overlayTimer = 0;
 let panelDueMs = 0;
 let announceDueMs = 0;
 let orderItems = [];
@@ -50,13 +49,16 @@ export function initRace(options) {
   initStage(byId('stage'));
   byId('btnPause').addEventListener('click', togglePause);
   byId('btnReset').addEventListener('click', resetRace);
-  byId('overlayPause').addEventListener('click', togglePause);
+  byId('overlayPause').addEventListener('click', () => {
+    hideOverlay();
+    togglePause();
+  });
   byId('overlayReset').addEventListener('click', () => {
     hideOverlay();
     resetRace();
   });
-  byId('overlayBack').addEventListener('click', hideOverlay);
-  byId('stage').addEventListener('pointerdown', showOverlay);
+  byId('overlayStay').addEventListener('click', hideOverlay);
+  byId('stage').addEventListener('pointerdown', pauseAndShowOverlay);
   byId('stageOverlay').addEventListener('pointerdown', event => {
     if (event.target === event.currentTarget) hideOverlay();
   });
@@ -386,21 +388,22 @@ function onStageResize() {
 }
 
 /**
- * showOverlay() → a tap on the stage dims it and shows the controls large (Rich, 2026-11-01);
- * it clears on a tap outside or after overlayHideMs. The race keeps running.
+ * pauseAndShowOverlay() → a tap on the stage pauses the race at once and dims the stage with the
+ * controls large: Play, Reset race, Stay paused (Rich, 2026-11-01: a tap is a pause, never a
+ * race running on behind a dimmed stage). The overlay stays until a button or a tap outside it;
+ * a tap outside leaves the race paused with the stage clear, the bar showing Play.
  */
-function showOverlay() {
+function pauseAndShowOverlay() {
+  if (!app.race) return;
+  pauseRace();
+  app.clock.isHiddenPause = false;
   byId('stageOverlay').hidden = false;
-  clearTimeout(overlayTimer);
-  overlayTimer = setTimeout(hideOverlay, app.config.overlayHideMs);
 }
 
 /**
- * hideOverlay() → clears the tapped-stage overlay.
+ * hideOverlay() → clears the tapped-stage overlay; the race stays as it is.
  */
 function hideOverlay() {
-  clearTimeout(overlayTimer);
-  overlayTimer = 0;
   byId('stageOverlay').hidden = true;
 }
 
