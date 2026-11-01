@@ -900,7 +900,7 @@ const TIME_SCALE = 1000;
 // The export columns, locked once a version with them is released.
 const CSV_RESULT_COLUMNS = [
   'place', 'display_name', 'name', 'time_sec', 'seed', 'duration_sec', 'entrant_count',
-  'app_version',
+  'app_version', 'overrides',
 ];
 
 /**
@@ -950,11 +950,23 @@ function csvCell(value) {
 }
 
 /**
+ * overridesText(overrides) → 'key=value key=value', or '' for a stock race.
+ * The link settings in effect, as one cell, so a CSV alone shows whether a race was stock
+ * (Rich's decision, 2026-11-01: a clean audit from either export). Keys in sorted order so the
+ * same settings always read the same.
+ */
+function overridesText(overrides) {
+  const keys = Object.keys(overrides || {}).sort();
+  return keys.map(key => `${key}=${overrides[key]}`).join(' ');
+}
+
+/**
  * resultToCsv(result) → string. One row per entrant in finishing order, with the race's seed,
- * duration, entrant count and version repeated on every row so a row stands alone.
+ * duration, entrant count, version and overrides repeated on every row so a row stands alone.
  */
 export function resultToCsv(result) {
   const lines = [CSV_RESULT_COLUMNS.join(',')];
+  const overrides = overridesText(result.overrides);
   for (const entry of result.places) {
     lines.push([
       entry.place,
@@ -965,6 +977,7 @@ export function resultToCsv(result) {
       result.durationSec,
       result.entrantCount,
       result.appVersion,
+      overrides,
     ].map(csvCell).join(','));
   }
   return `${lines.join('\r\n')}\r\n`;
@@ -1456,6 +1469,19 @@ function sanitizerTests(check) {
     rows.length === 4 && rows[0] === CSV_RESULT_COLUMNS.join(',')
       && csv.includes("'=1+1") && csv.includes('"Smith, ""Jo"""') && csv.includes("'-rich"),
     rows[0]);
+  const tweaked = sanitizeOverrides([['cornerSpread', '0.2'], ['durationSec', '12']]);
+  const tweakedRace = createRace({
+    entrants: testEntrants(3),
+    seed: 'audit',
+    durationSec: 12,
+    config: tweaked.config,
+    overrides: tweaked.overrides,
+  });
+  const tweakedCsv = resultToCsv(finishResult(runToFinish(tweakedRace)));
+  check('Export: the overrides column names every link setting in effect, blank when stock',
+    tweakedCsv.split('\r\n')[1].endsWith(',cornerSpread=0.2 durationSec=12')
+      && rows[1].endsWith(`,${CONFIG.appVersion},`),
+    tweakedCsv.split('\r\n')[1]);
   const sampleBytes = [0, 31, 32, 255, 7, 8, 9, 10];
   const SEED_PATTERN = /^[23456789A-HJ-NP-Z]{4}-[23456789A-HJ-NP-Z]{4}$/;
   check('Seed: seedFromBytes formats 8 bytes as XXXX-XXXX from the unambiguous alphabet',
