@@ -538,20 +538,18 @@ function drawCars(snapshot) {
 /* ==== LIGHTS ==== */
 
 /**
- * drawLights(litCount, clearLeftPx) → the start lights over the road: three discs, `litCount`
- * of them red, drawn while the countdown runs and for a moment after they go out. The box sits
+ * drawLights(litCount, clear) → the start lights over the road: three discs, `litCount` of
+ * them red, drawn while the countdown runs and for a moment after they go out. The box sits
  * just above the cars on the start line (where the camera's look-back puts them at tick 0),
- * centred on the stage, or pushed right as far as it takes to clear `clearLeftPx` (the timing
- * tower's edge) so the two never overlap (Rich, 2026-11-01).
+ * centred on the road there. `clear` is { rightPx, bottomPx }: how far the timing tower's rows
+ * reach into the stage. Only when they reach down to the lights is the box pushed right, as far
+ * as it takes to clear them, so the two never overlap (Rich, 2026-11-01).
  */
-function drawLights(litCount, clearLeftPx) {
+function drawLights(litCount, clear) {
   const { ctx } = view;
   const diameter = Math.min(LIGHT_MAX_DIAMETER_PX, view.width * LIGHT_DIAMETER_FRACTION);
   const gap = diameter * 0.5;
   const totalWidth = LIGHT_COUNT * diameter + (LIGHT_COUNT - 1) * gap;
-  const centredLeft = (view.width - totalWidth) / 2;
-  const clearLeft = clearLeftPx + gap * 2;
-  const left = Math.min(view.width - totalWidth - gap, Math.max(centredLeft, clearLeft));
   const startScale = Math.min(1, scene.config.cameraNearUnits / scene.config.lookBackUnits);
   const carHeightPx = roadHalfWidthNearPx() * 2 * CAR_WIDTH_FRACTION * startScale
     * CAR_HEIGHT_RATIO;
@@ -559,6 +557,11 @@ function drawLights(litCount, clearLeftPx) {
   const boxBottom = screenYAt(startScale) - carHeightPx - LIGHT_CLEARANCE_PX;
   const boxTop = Math.max(LIGHT_TOP_MARGIN_PX, boxBottom - boxHeight);
   const top = boxTop + gap / 2;
+  const roadCentreX = roadCentreXAt(startScale, lateralAt(scene.config.lookBackUnits));
+  const centredLeft = roadCentreX - totalWidth / 2;
+  const isBesideTower = boxTop < clear.bottomPx;
+  const clearLeft = isBesideTower ? clear.rightPx + gap * 2 : 0;
+  const left = Math.min(view.width - totalWidth - gap, Math.max(centredLeft, clearLeft));
   ctx.fillStyle = COLOR_TYRE;
   ctx.fillRect(left - gap, boxTop, totalWidth + gap * 2, boxHeight);
   for (let i = 0; i < LIGHT_COUNT; i++) {
@@ -580,9 +583,9 @@ export function carColor(car) {
 }
 
 /**
- * drawFrame(snapshot, options) → one frame: { frameDeltaSec, lightsLit, lightsClearPx } where
- * lightsLit is -1 for no lights, else how many of the three are red, and lightsClearPx is the
- * stage width the lights must keep clear of at the left (the tower).
+ * drawFrame(snapshot, options) → one frame: { frameDeltaSec, lightsLit, lightsClear } where
+ * lightsLit is -1 for no lights, else how many of the three are red, and lightsClear is
+ * { rightPx, bottomPx }: how far the tower's rows reach into the stage from its top-left.
  */
 export function drawFrame(snapshot, options) {
   const { ctx } = view;
@@ -593,7 +596,9 @@ export function drawFrame(snapshot, options) {
   drawRoad();
   drawFinishLine();
   drawCars(snapshot);
-  if (options.lightsLit >= 0) drawLights(options.lightsLit, options.lightsClearPx || 0);
+  if (options.lightsLit >= 0) {
+    drawLights(options.lightsLit, options.lightsClear || { rightPx: 0, bottomPx: 0 });
+  }
 }
 
 /**

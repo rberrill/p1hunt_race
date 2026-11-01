@@ -11,7 +11,7 @@ import {
   raceSnapshot,
   trackLayout,
   finishResult,
-} from '../engine.js?v=0.1.0-dev.14';
+} from '../engine.js?v=0.1.0-dev.15';
 import {
   app,
   byId,
@@ -21,7 +21,7 @@ import {
   announce,
   formatRaceTime,
   phoneMedia,
-} from './core.js?v=0.1.0-dev.14';
+} from './core.js?v=0.1.0-dev.15';
 import {
   initStage,
   resizeStage,
@@ -29,7 +29,7 @@ import {
   drawFrame,
   drawStill,
   carColor,
-} from './stage.js?v=0.1.0-dev.14';
+} from './stage.js?v=0.1.0-dev.15';
 
 // The timing tower and the HUD text are rewritten at most this often (frame time).
 const PANEL_INTERVAL_MS = 100;
@@ -298,7 +298,7 @@ function drawCurrentFrame(frameTimeMs, tickFraction = 0, clockMs = raceClockMs(f
   drawFrame(snapshot, {
     frameDeltaSec,
     lightsLit: lit,
-    lightsClearPx: lit >= 0 ? towerRightPx() : 0,
+    lightsClear: lit >= 0 ? towerExtent() : null,
   });
   if (frameTimeMs >= panelDueMs) {
     panelDueMs = frameTimeMs + PANEL_INTERVAL_MS;
@@ -311,13 +311,21 @@ function drawCurrentFrame(frameTimeMs, tickFraction = 0, clockMs = raceClockMs(f
 }
 
 /**
- * towerRightPx() → how far the timing tower reaches into the stage from its left edge, so the
- * lights can keep clear of it.
+ * towerExtent() → { rightPx, bottomPx }: how far the timing tower's rows reach into the stage
+ * from its top-left corner, so the lights can keep clear of them. The tower's box runs the
+ * stage's height whatever it holds; its last visible row, or the "+ n more" line, is where its
+ * content ends.
  */
-function towerRightPx() {
-  const tower = byId('tower').getBoundingClientRect();
+function towerExtent() {
   const wrap = byId('stageWrap').getBoundingClientRect();
-  return Math.max(0, tower.right - wrap.left);
+  const tower = byId('tower').getBoundingClientRect();
+  const more = byId('towerMore');
+  let last = more.hidden ? null : more;
+  for (let i = towerRows.length - 1; i >= 0 && !last; i--) {
+    if (!towerRows[i].hidden) last = towerRows[i];
+  }
+  const bottomPx = last ? last.getBoundingClientRect().bottom - wrap.top : 0;
+  return { rightPx: Math.max(0, tower.right - wrap.left), bottomPx: Math.max(0, bottomPx) };
 }
 
 /**
