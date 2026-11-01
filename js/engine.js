@@ -5,7 +5,7 @@
 // max, imul and shifts), so the same inputs give the same finish on every device.
 //
 // Sections: RANDOM, TEXT, ENTRANTS, TRACK, RACE, RESULT, SANITIZERS, SELF-TEST.
-import { CONFIG, CONFIG_LIMITS } from './config.js?v=0.1.0-dev.5';
+import { CONFIG, CONFIG_LIMITS } from './config.js?v=0.1.0-dev.6';
 
 /* ==== RANDOM ==== */
 
@@ -1178,7 +1178,7 @@ const LAST_CAR_LATEST_SHARE = 1.15;
 // proof that the engine's arithmetic is identical across engines; a tuning change moves it, and
 // that is a user-visible change (a new version), so the constant is updated with the version.
 const REFERENCE_SEED = 'P1HUNT';
-const REFERENCE_FINGERPRINT = '50a2af57';
+const REFERENCE_FINGERPRINT = '54c0c8eb';
 
 /**
  * testEntrants(count) → [{ name }], `count` distinct names.

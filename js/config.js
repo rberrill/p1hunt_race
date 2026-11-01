@@ -6,7 +6,7 @@
 // what a car at cruise speed covers in one second, so a straight of 3 units is a 3 s straight.
 
 export const CONFIG = {
-  appVersion: '0.1.0-dev.5',
+  appVersion: '0.1.0-dev.6',
   storageKey: 'p1hunt.race.v1',
 
   // Race time (not overridable: it is the definition of race time)
@@ -22,17 +22,18 @@ export const CONFIG = {
 
   // Track: turns per 10 s of duration, the straights (a few long ones among short ones), the
   // apex speed as a fraction of cruise, and the braking and exit zones around each apex. The
-  // apex, zone, rate and spread values are Rich's pick (2026-11-01) from three measured presets:
-  // corners visibly slower and the pack visibly stretching, without doubling the tail
+  // apex, zone, rate and spread values are Rich's picks (2026-11-01) from measured presets:
+  // corners visibly slower and the pack visibly stretching, without doubling the tail; the apex
+  // and braking zone softened once the top speed was in ("too aggressive" in the turns)
   turnsPerTenSecMin: 2,
   turnsPerTenSecMax: 3,
   longStraightsMin: 1,
   longStraightsMax: 3,
   longStraightRatio: 3,
   straightJitter: 0.25,
-  apexSpeedMin: 0.35,
-  apexSpeedMax: 0.55,
-  brakeZoneUnits: 0.4,
+  apexSpeedMin: 0.45,
+  apexSpeedMax: 0.65,
+  brakeZoneUnits: 0.6,
   exitZoneUnits: 0.6,
 
   // Cars: every car has the same base pace (not a tunable; Rich's decision). A launch factor,
