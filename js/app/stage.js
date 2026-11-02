@@ -24,13 +24,19 @@ const COLOR_CAR_DARK = '#232327';
 const COLOR_HELMET = '#e8e8ea';
 const COLOR_MIX_WHITE = '#ffffff';
 const COLOR_MIX_BLACK = '#000000';
-// The top three sit in a translucent box edged in the car's colour; the pack is haloed text
-// with no box, so the cars behind show through (Rich, 2026-11-02, from six mockups in
-// archive/label-options.html, Claude's pick: a box survives stream compression for the
-// names that matter, the pack recedes).
+// The top three sit in a translucent box with their place, 1 to 3, at its left (Rich,
+// 2026-11-02, over the colour edge first built); the pack is haloed text with no box, so the
+// cars behind show through (Rich, 2026-11-02, from six mockups in archive/label-options.html,
+// Claude's pick: a box survives stream compression for the names that matter, the pack
+// recedes). The place is coloured like the tower's: the leader's in the accent.
 const COLOR_LABEL_BG = 'rgba(22, 22, 24, 0.55)';
+// Where two top-three boxes overlap, the car ahead's is painted opaque so its name reads
+// whole; two translucent boxes read as one garbled name (seen on dev.38).
+const COLOR_LABEL_BG_OPAQUE = 'rgba(22, 22, 24, 0.92)';
 const COLOR_LABEL_TEXT = '#e8e8ea';
 const COLOR_LABEL_HALO = 'rgba(10, 10, 12, 0.9)';
+const COLOR_LABEL_PLACE = '#a0a0a6';
+const COLOR_LABEL_LEADER = '#e5322d';
 const COLOR_LIGHT_ON = '#e5322d';
 const COLOR_LIGHT_OFF = '#3a3a40';
 // Twelve flat car colors by list index; no mapping onto any real livery (Claude's call).
@@ -155,7 +161,8 @@ const LABEL_FONT_FRACTION = 0.34;
 const LABEL_FONT_MIN_PX = 10;
 const LABEL_FONT_MAX_PX = 16;
 const LABEL_PADDING_PX = 3;
-const LABEL_EDGE_PX = 3;
+// Between the place and the name in a top-three label.
+const LABEL_PLACE_GAP_PX = 4;
 // The halo's stroke as a fraction of the font size, at least LABEL_HALO_MIN_PX wide.
 const LABEL_HALO_FRACTION = 0.28;
 const LABEL_HALO_MIN_PX = 3;
@@ -217,6 +224,7 @@ const labels = {
   y: new Float64Array(MAX_CARS),
   widthPx: new Float64Array(MAX_CARS),
   isTop: new Uint8Array(MAX_CARS),
+  place: new Uint8Array(MAX_CARS),
   left: new Float64Array(MAX_CARS),
   right: new Float64Array(MAX_CARS),
   top: new Float64Array(MAX_CARS),
@@ -230,8 +238,9 @@ const labelShownSinceMs = new Float64Array(MAX_CARS).fill(-1);
 const labelFreeSinceMs = new Float64Array(MAX_CARS).fill(-1);
 const labelIsCandidate = new Uint8Array(MAX_CARS);
 const shownOrder = new Int32Array(MAX_CARS);
-// The box of the label measured last, by measureLabel.
-const labelBox = { left: 0, right: 0, top: 0, bottom: 0, fontPx: 0 };
+// The box of the label measured last, by measureLabel; placePx is the place's width for a
+// top-three label.
+const labelBox = { left: 0, right: 0, top: 0, bottom: 0, fontPx: 0, placePx: 0, isOpaque: false };
 
 /**
  * initStage(canvas) → takes the canvas and its drawing context.
@@ -919,13 +928,17 @@ function drawLabel(i) {
   ctx.textBaseline = 'bottom';
   const baseline = labelBox.bottom - LABEL_PADDING_PX;
   if (labels.isTop[i] === 1) {
-    ctx.fillStyle = COLOR_LABEL_BG;
+    ctx.fillStyle = labelBox.isOpaque ? COLOR_LABEL_BG_OPAQUE : COLOR_LABEL_BG;
     ctx.fillRect(labelBox.left, labelBox.top, labelBox.right - labelBox.left,
       labelBox.bottom - labelBox.top);
-    ctx.fillStyle = scene.colors[car];
-    ctx.fillRect(labelBox.left, labelBox.top, LABEL_EDGE_PX, labelBox.bottom - labelBox.top);
+    ctx.textAlign = 'left';
+    const placeLeft = labelBox.left + LABEL_PADDING_PX;
+    ctx.font = placeFont(fontPx);
+    ctx.fillStyle = labels.place[i] === 1 ? COLOR_LABEL_LEADER : COLOR_LABEL_PLACE;
+    ctx.fillText(String(labels.place[i]), placeLeft, baseline);
+    ctx.font = labelFont(fontPx, true);
     ctx.fillStyle = COLOR_LABEL_TEXT;
-    ctx.fillText(text, labels.x[i] + LABEL_EDGE_PX / 2, baseline);
+    ctx.fillText(text, placeLeft + labelBox.placePx + LABEL_PLACE_GAP_PX, baseline);
     return;
   }
   ctx.lineJoin = 'round';
@@ -941,6 +954,14 @@ function drawLabel(i) {
  */
 function labelFont(fontPx, isTop) {
   return `${isTop ? 600 : 700} ${fontPx}px system-ui, sans-serif`;
+}
+
+/**
+ * placeFont(fontPx) → the canvas font for the place in a top-three label, heavy like the
+ * tower's place column.
+ */
+function placeFont(fontPx) {
+  return `800 ${fontPx}px system-ui, sans-serif`;
 }
 
 /**
@@ -965,6 +986,8 @@ function drawLabels(frameTimeMs) {
     labelIsCandidate[car] = 1;
     if (labelShownSinceMs[car] < 0) labelShownSinceMs[car] = frameTimeMs;
     measureLabel(i, true);
+    labelBox.isOpaque = !isBoxFree(labelBox.left, labelBox.right, labelBox.top,
+      labelBox.bottom, accepted);
     accepted = acceptLabel(i, accepted);
   }
   const shownCount = collectShown();
@@ -1043,8 +1066,14 @@ function measureLabel(i, isForced) {
   const fontPx = labelFontPx(labels.widthPx[i], isForced);
   ctx.font = labelFont(fontPx, isForced);
   const text = scene.displayNames[labels.car[i]];
-  const edgePx = isForced ? LABEL_EDGE_PX : 0;
-  const halfWidth = (ctx.measureText(text).width + edgePx) / 2 + LABEL_PADDING_PX;
+  let placePx = 0;
+  if (isForced) {
+    ctx.font = placeFont(fontPx);
+    placePx = ctx.measureText(String(labels.place[i])).width + LABEL_PLACE_GAP_PX;
+    ctx.font = labelFont(fontPx, true);
+  }
+  labelBox.placePx = placePx - (isForced ? LABEL_PLACE_GAP_PX : 0);
+  const halfWidth = (ctx.measureText(text).width + placePx) / 2 + LABEL_PADDING_PX;
   const heightPx = fontPx + LABEL_PADDING_PX * 2;
   labelBox.fontPx = fontPx;
   labelBox.left = labels.x[i] - halfWidth;
@@ -1108,6 +1137,7 @@ function drawCars(snapshot, isLabelled, frameTimeMs) {
       labels.y[labels.count] = y;
       labels.widthPx[labels.count] = widthPx;
       labels.isTop[labels.count] = isTop ? 1 : 0;
+      labels.place[labels.count] = i + 1;
       labels.count++;
     }
   }
