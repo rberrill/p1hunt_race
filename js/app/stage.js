@@ -119,11 +119,21 @@ const ROAD_FADE_FRACTION = 0.25;
 // A strip's bend is integrated in steps this long at most (track units), so a far turn, where
 // one strip spans several units, slides in smoothly instead of popping (Rich, 2026-11-01).
 const BEND_STEP_UNITS = 0.1;
-// Kerb blocks and centre dashes repeat every so many track units, so they scroll with the road.
-const KERB_UNITS = 0.25;
-const DASH_UNITS = 0.5;
+// Kerb blocks and centre dashes repeat every `kerbUnits` / `dashUnits` of track (CONFIG), so
+// they scroll with the road; their widths as shares of the road's half-width.
 const KERB_WIDTH_FRACTION = 0.07;
 const DASH_WIDTH_FRACTION = 0.02;
+// Braking boards (Rich, 2026-11-02): a post on the outside verge with a white board carrying
+// red bars, 3, 2, 1 toward the corner. Sizes are shares of the road's half-width at the
+// board's depth, so they scale with perspective like the cars (Claude's proportions).
+const BOARD_OFFSET_FRACTION = 1.35;
+const BOARD_WIDTH_FRACTION = 0.22;
+const BOARD_HEIGHT_RATIO = 0.75;
+const BOARD_POST_RATIO = 1;
+const BOARD_POST_WIDTH_FRACTION = 0.08;
+const BOARD_BAR_INSET_RATIO = 0.15;
+const BOARD_BAR_HEIGHT_RATIO = 0.7;
+const BOARD_MIN_WIDTH_PX = 2;
 // The bend is drawn over the corner alone (the braking happens on straight road before it;
 // Rich, 2026-11-02) and peaks at the apex with a strength from a sweeper's to a hairpin's by
 // the corner's sharpness; BEND_GAIN is how strongly the road's centre moves per unit of
@@ -468,8 +478,8 @@ function drawRoad() {
     const halfWidthNear = halfNear * scaleNear;
     const halfWidthFar = halfNear * scaleFar;
     const trackUnits = camera.units + strips.depth[i];
-    const isEvenRoad = Math.floor(trackUnits / DASH_UNITS) % 2 === 0;
-    const isEvenKerb = Math.floor(trackUnits / KERB_UNITS) % 2 === 0;
+    const isEvenRoad = Math.floor(trackUnits / scene.config.dashUnits) % 2 === 0;
+    const isEvenKerb = Math.floor(trackUnits / scene.config.kerbUnits) % 2 === 0;
     const kerbNear = halfWidthNear * KERB_WIDTH_FRACTION;
     const kerbFar = halfWidthFar * KERB_WIDTH_FRACTION;
     const kerbColor = fadedColor(isEvenKerb ? COLOR_KERB_RED : COLOR_KERB_WHITE, fade);
@@ -499,6 +509,62 @@ function drawRoad() {
         fadedColor(COLOR_LINE, fade),
       );
     }
+  }
+}
+
+/**
+ * drawBoards() → the braking boards before every corner in view: `boardCount` of them,
+ * `boardUnits` apart on the straight before the corner's start, on the outside verge (the
+ * side away from the turn), far to near so a near board paints over a far one. A board that
+ * would stand before the start line is not drawn. Far boards fade with the road.
+ */
+function drawBoards() {
+  const { boardCount, boardUnits, cameraNearUnits, roadViewUnits } = scene.config;
+  if (boardCount <= 0) return;
+  const { turns } = scene.layout;
+  const fadeStart = ROAD_STRIPS * (1 - ROAD_FADE_FRACTION);
+  for (let i = turns.length - 1; i >= 0; i--) {
+    const turn = turns[i];
+    for (let bars = boardCount; bars >= 1; bars--) {
+      const trackUnits = turn.cornerStart - bars * boardUnits;
+      if (trackUnits < 0) continue;
+      const depth = trackUnits - camera.units;
+      if (depth < cameraNearUnits || depth > roadViewUnits) continue;
+      const stripIndex = stripIndexFor(depth);
+      const fade = stripIndex < fadeStart
+        ? 0
+        : (stripIndex - fadeStart) / (ROAD_STRIPS - fadeStart);
+      drawBoard(depth, -turn.direction, bars, fade);
+    }
+  }
+}
+
+/**
+ * drawBoard(depth, side, barCount, fade) → one braking board at `depth` (track units from the
+ * camera) on `side` of the road (-1 left, 1 right): a post from the verge, a white board on
+ * top with `barCount` red bars, both mixed toward the verge by `fade` (0 to 1).
+ */
+function drawBoard(depth, side, barCount, fade) {
+  const scale = scene.config.cameraNearUnits / depth;
+  const halfWidth = roadHalfWidthNearPx() * scale;
+  const width = halfWidth * BOARD_WIDTH_FRACTION;
+  if (width < BOARD_MIN_WIDTH_PX) return;
+  const x = roadCentreXAt(scale, lateralAt(depth)) + side * halfWidth * BOARD_OFFSET_FRACTION;
+  const groundY = screenYAt(scale);
+  const height = width * BOARD_HEIGHT_RATIO;
+  const postHeight = width * BOARD_POST_RATIO;
+  const postWidth = Math.max(1, width * BOARD_POST_WIDTH_FRACTION);
+  const top = groundY - postHeight - height;
+  const { ctx } = view;
+  ctx.fillStyle = fadedColor(COLOR_KERB_WHITE, fade);
+  ctx.fillRect(x - postWidth / 2, groundY - postHeight, postWidth, postHeight);
+  ctx.fillRect(x - width / 2, top, width, height);
+  ctx.fillStyle = fadedColor(COLOR_KERB_RED, fade);
+  const barWidth = width / (barCount * 2 + 1);
+  const barTop = top + height * BOARD_BAR_INSET_RATIO;
+  const barHeight = height * BOARD_BAR_HEIGHT_RATIO;
+  for (let bar = 0; bar < barCount; bar++) {
+    ctx.fillRect(x - width / 2 + barWidth * (2 * bar + 1), barTop, barWidth, barHeight);
   }
 }
 
@@ -997,6 +1063,7 @@ export function drawFrame(snapshot, options) {
   computeStrips();
   drawBackground();
   drawRoad();
+  drawBoards();
   drawFinishLine();
   drawCars(snapshot, options.isLabelled);
   if (options.lightsLit >= 0) drawLights(options.lightsLit);
@@ -1014,6 +1081,7 @@ export function drawStill() {
   computeStrips();
   drawBackground();
   drawRoad();
+  drawBoards();
   drawFinishLine();
   drawLights(0);
 }

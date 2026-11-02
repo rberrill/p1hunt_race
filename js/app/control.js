@@ -2,7 +2,7 @@
 // confirm on stream, the seed with New and its Locked / Unlocked badge, the duration, and the
 // Start race gate. The textarea is the single source of truth for the list (Claude's call): a
 // CSV import is written into it one line per entrant, so one stored form feeds one sanitizer.
-import { CONFIG } from '../config.js?v=0.1.0-dev.25';
+import { CONFIG } from '../config.js?v=0.1.0-dev.26';
 import {
   parseEntrantText,
   parseCsv,
@@ -11,9 +11,9 @@ import {
   csvTemplate,
   sanitizeSeed,
   seedFromBytes,
-} from '../engine.js?v=0.1.0-dev.25';
-import { app, byId, makeEl, setText, files, phoneMedia, showCard } from './core.js?v=0.1.0-dev.25';
-import { saveSession } from './session.js?v=0.1.0-dev.25';
+} from '../engine.js?v=0.1.0-dev.26';
+import { app, byId, makeEl, setText, files, phoneMedia, showCard } from './core.js?v=0.1.0-dev.26';
+import { saveSession } from './session.js?v=0.1.0-dev.26';
 
 // The phone shows this many grid places before "Show all" (from the wireframe).
 const PHONE_GRID_PREVIEW = 6;

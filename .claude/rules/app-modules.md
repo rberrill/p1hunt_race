@@ -31,7 +31,8 @@ paths:
 
 - `js/config.js`: `CONFIG` (every tunable, `appVersion`, `storageKey`) and `CONFIG_LIMITS` (the
   link-overridable keys with their ranges). The shell's tunables (`startCountdownSec`,
-  `finishHoldMs`, `revealSec`, `maxFrameGapMs`, the camera's units,
+  `finishHoldMs`, `revealSec`, `maxFrameGapMs`, the camera's units, the road texture
+  (`kerbUnits`, `dashUnits`) and the braking boards (`boardCount`, `boardUnits`),
   `labelMinWidthPx`, `reducedMotion`, `saveDebounceMs`) sit after the engine's.
 - `js/app/main.js`: the entry. Link settings through `sanitizeOverrides`; the saved session and
   the Resume card; the phase loop (Start race → the race → the record saved → the Winner screen →
@@ -60,7 +61,8 @@ paths:
   it) would otherwise leave `isPlaying` set and the new race would never get a frame.
 - `js/app/stage.js`: the canvas. The perspective road from `trackLayout` (drawn `roadViewUnits`
   ahead, fading out at a vanishing point by mixing colours toward the verge, never alpha; kerbs
-  beside the tarmac, never under it; bends integrated in fine steps), the camera (follows the
+  beside the tarmac, never under it; bends integrated in fine steps; braking boards on the
+  outside verge before each corner, `drawBoards`), the camera (follows the
   leader, parks at the finish), cars drawn from primitives (`CAR_SHAPE`, Option B of the
   2026-11-02 mockup) in a color by index with an accent per dozen (`CAR_ACCENTS`; the tower's
   swatch is the color alone), the shade bands mixed once per race in `setScene`, labels on cars
