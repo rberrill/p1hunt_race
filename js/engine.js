@@ -5,7 +5,7 @@
 // max, imul and shifts), so the same inputs give the same finish on every device.
 //
 // Sections: RANDOM, TEXT, ENTRANTS, TRACK, RACE, RESULT, SANITIZERS, SELF-TEST.
-import { CONFIG, CONFIG_LIMITS } from './config.js?v=0.1.0-dev.33';
+import { CONFIG, CONFIG_LIMITS } from './config.js?v=0.1.0-dev.34';
 
 /* ==== RANDOM ==== */
 
@@ -614,9 +614,13 @@ function drawCarCheckpoints(seedText, carIndex, track, config) {
   for (let i = 0; i <= track.turnCount; i++) {
     const first = next;
     const perStraight = checkpointsOn(track, i, config);
+    // The car's pace for this straight as a whole, under every checkpoint on it (Rich,
+    // 2026-11-02: a pace that lasts the straight keeps the field spread).
+    const straightPace = random.nextBetween(-config.straightSpread, config.straightSpread);
     for (let j = 0; j < perStraight; j++) {
       const along = random.nextBetween(track.straightStart[i], track.straightEnd[i]);
-      const spread = random.nextBetween(-config.checkpointSpread, config.checkpointSpread);
+      const spread = straightPace
+        + random.nextBetween(-config.checkpointSpread, config.checkpointSpread);
       // Insertion sort within the straight keeps the checkpoints in distance order.
       let slot = next;
       while (slot > first && distance[slot - 1] > along) {
@@ -1289,7 +1293,7 @@ const LAST_CAR_LATEST_SHARE = 1.15;
 // proof that the engine's arithmetic is identical across engines; a tuning change moves it, and
 // that is a user-visible change (a new version), so the constant is updated with the version.
 const REFERENCE_SEED = 'P1HUNT';
-const REFERENCE_FINGERPRINT = '80fdcf7a';
+const REFERENCE_FINGERPRINT = '1f1637d6';
 
 /**
  * testEntrants(count) → [{ name }], `count` distinct names.
@@ -1583,6 +1587,46 @@ function exitEffectHolds(race) {
 }
 
 /**
+ * straightPaceHolds(race) → true when, with the checkpoint spread off, every checkpoint of the
+ * first car on one straight carries the same factor, within `straightSpread` of the base pace,
+ * and the straights differ from one another.
+ */
+function straightPaceHolds(race) {
+  const { track } = race;
+  const spread = race.config.straightSpread;
+  const paces = [];
+  for (let i = 0; i <= track.turnCount; i++) {
+    let pace = null;
+    const start = race.checkpointStart[0] + 1;
+    for (let checkpoint = start; checkpoint < race.checkpointEnd[0]; checkpoint++) {
+      const distance = race.checkpointDistance[checkpoint];
+      if (distance < track.straightStart[i] || distance > track.straightEnd[i]) continue;
+      const factor = race.checkpointFactor[checkpoint];
+      if (pace === null) pace = factor;
+      if (factor !== pace) return false;
+      if (Math.abs(factor - BASE_PACE) > BASE_PACE * spread) return false;
+    }
+    paces.push(pace);
+  }
+  return paces.some(pace => pace !== paces[0]);
+}
+
+/**
+ * straightTests(check) → nothing. The straight pace (Rich, 2026-11-02): one seeded pace per car
+ * per straight under every checkpoint on it.
+ */
+function straightTests(check) {
+  const race = createRace({
+    entrants: testEntrants(3),
+    seed: 'straights',
+    durationSec: 30,
+    config: { ...CONFIG, checkpointSpread: 0 },
+  });
+  check('Straights: with the checkpoint spread off, a straight\'s checkpoints share one pace',
+    straightPaceHolds(race), `${race.track.turnCount + 1} straights`);
+}
+
+/**
  * exitTests(check) → nothing. Corner exits (Rich, 2026-11-02): the seeded exit quality is a
  * centred bell with its tails reached; a car's acceleration from each apex is the base rate
  * times its exit factor for that corner.
@@ -1844,8 +1888,8 @@ export function selfTest() {
   const check = (name, pass, detail) => {
     results.push({ name, pass: !!pass, detail: detail === undefined ? '' : String(detail) });
   };
-  const groups = [randomTests, determinismTests, durationTests, cornerTests, exitTests,
-    raceTests, entrantTests, sanitizerTests];
+  const groups = [randomTests, determinismTests, durationTests, cornerTests, straightTests,
+    exitTests, raceTests, entrantTests, sanitizerTests];
   for (const group of groups) {
     try {
       group(check);

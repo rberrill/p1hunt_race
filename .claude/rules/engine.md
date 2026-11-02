@@ -74,7 +74,9 @@ decision log).
   standing start on one line, no grid rows (the stage may draw depth, the engine gives no head
   start); per car a launch factor and checkpoints along each straight scaling the straight's
   target (`checkpointsOn`: `checkpointsPerUnit` times the straight's length, at least one; Rich,
-  2026-11-02: a fixed count per straight froze the order down a long one), and a corner factor per corner scaling the speed it holds there (drawn apart from the
+  2026-11-02: a fixed count per straight froze the order down a long one) with one seeded pace
+  per car per straight under all of them (`straightSpread`; Rich, 2026-11-02: independent
+  checkpoints averaged out and bunched the field), and a corner factor per corner scaling the speed it holds there (drawn apart from the
   checkpoints, because the braking decision needs it before the corner), each a spread around
   1.0 from `CONFIG`. Speed moves toward the planned speed by at most the acceleration or
   braking rate per tick. **Corner exits** (Rich, 2026-11-02): per car and corner a seeded exit
