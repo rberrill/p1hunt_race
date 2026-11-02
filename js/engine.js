@@ -5,7 +5,7 @@
 // max, imul and shifts), so the same inputs give the same finish on every device.
 //
 // Sections: RANDOM, TEXT, ENTRANTS, TRACK, RACE, RESULT, SANITIZERS, SELF-TEST.
-import { CONFIG, CONFIG_LIMITS } from './config.js?v=0.1.0-dev.21';
+import { CONFIG, CONFIG_LIMITS } from './config.js?v=0.1.0-dev.22';
 
 /* ==== RANDOM ==== */
 
@@ -446,8 +446,11 @@ function layoutTrack(shape, scale, config) {
 /**
  * planSpeed(plan, track, turnIndex, distance, speed, straightTarget, cornerSpeed, isBraking)
  *   → nothing; fills `plan.desired` (the speed the car wants this tick) and `plan.isBraking`.
- * In the corner the car wants the corner speed, held. On the straight before it, it wants the
- * straight's target until it has to brake: when its speed squared exceeds the corner speed
+ * From the corner's start to its apex the car wants the corner speed, held; from the apex on it
+ * wants the straight's target again, so the throttle opens at the apex while the road is still
+ * straightening (Rich, 2026-11-02), and `turnIndex` moves on at the apex, so the next corner's
+ * braking is already in view. On the straight before a corner, it wants the straight's target
+ * until it has to brake: when its speed squared exceeds the corner speed
  * squared plus twice the braking rate times the road left to the corner after this tick's
  * travel, braking at that rate from here lands it at the corner speed where the bend starts
  * (v² = u² + 2·a·s, the one kinematic rule; multiplication only, so it rounds the same on every
@@ -456,7 +459,7 @@ function layoutTrack(shape, scale, config) {
  * corner speed and holds it to the bend, never reopening the throttle, so the slow-down reads as
  * one braking (Rich, 2026-11-02: slow at the very end of the straight, not in the corner).
  * After the last corner there is only the straight's target. `plan` is reused, so the hot loop
- * allocates nothing. `turnIndex` is the first corner the car has not left yet.
+ * allocates nothing. `turnIndex` is the first corner whose apex the car has not passed.
  */
 function planSpeed(
   plan, track, turnIndex, distance, speed, straightTarget, cornerSpeed, isBraking,
@@ -517,7 +520,7 @@ function runNominalCar(track, tickLimit, stopDistance, config) {
   let isBraking = false;
   let ticks = 0;
   while (ticks < tickLimit && distance < stopDistance) {
-    while (turnIndex < track.turnCount && distance >= track.cornerEnd[turnIndex]) {
+    while (turnIndex < track.turnCount && distance >= track.apex[turnIndex]) {
       turnIndex++;
       isBraking = false;
     }
@@ -753,8 +756,8 @@ export function createRace(options) {
 /**
  * moveCars(race) → the number of cars that crossed the finish this tick (their indices are in
  * race.crossingBuffer).
- * One tick for every car: apply any checkpoint reached, keep the corner pointer current (a
- * corner left clears the braking flag), plan the speed the car wants (planSpeed) and move
+ * One tick for every car: apply any checkpoint reached, keep the corner pointer current (an
+ * apex passed clears the braking flag), plan the speed the car wants (planSpeed) and move
  * toward it by at most the acceleration or braking rate (limitSpeed), advance. Flat on purpose:
  * this runs 60 times a second for up to 100 cars, so nothing is allocated here.
  */
@@ -775,7 +778,7 @@ function moveCars(race) {
     race.checkpointIndex[i] = checkpoint;
     let turnIndex = race.turnIndex[i];
     let isBraking = race.isBraking[i] === 1;
-    while (turnIndex < turnCount && distance >= track.cornerEnd[turnIndex]) {
+    while (turnIndex < turnCount && distance >= track.apex[turnIndex]) {
       turnIndex++;
       isBraking = false;
     }
@@ -1241,7 +1244,7 @@ const LAST_CAR_LATEST_SHARE = 1.15;
 // proof that the engine's arithmetic is identical across engines; a tuning change moves it, and
 // that is a user-visible change (a new version), so the constant is updated with the version.
 const REFERENCE_SEED = 'P1HUNT';
-const REFERENCE_FINGERPRINT = 'a9afcb7d';
+const REFERENCE_FINGERPRINT = 'f3b96e8d';
 
 /**
  * testEntrants(count) → [{ name }], `count` distinct names.
@@ -1440,8 +1443,10 @@ function cornerShapeHolds(track) {
 /**
  * cornerProfileHolds(race) → true when the first car's speed through every corner follows the
  * braking rule: from the tick it starts braking to the corner's start its speed never rises;
- * it reaches the corner at its corner speed (within one braking step); and inside the corner it
- * never exceeds that speed. Ticks the race to the end.
+ * it reaches the corner at its corner speed (within one braking step); between the corner's
+ * start and its apex it never exceeds that speed; and on the tick after the apex it is no
+ * slower than before, unless it is already braking for the next corner (the throttle opens at
+ * the apex). Ticks the race to the end.
  */
 function cornerProfileHolds(race) {
   const { track } = race;
@@ -1454,13 +1459,14 @@ function cornerProfileHolds(race) {
     const distance = race.distance[0];
     const speed = race.speed[0];
     const turnIndex = race.turnIndex[0];
-    if (turnIndex >= track.turnCount) break;
-    const cornerSpeed = track.apexSpeed[turnIndex] * race.cornerFactor[turnIndex];
-    const isInCorner = distance >= track.cornerStart[turnIndex];
     if (turnIndex !== lastTurn) {
       lastTurn = turnIndex;
       wasBraking = false;
+      if (race.isBraking[0] === 0 && speed < previousSpeed) return false;
     }
+    if (turnIndex >= track.turnCount) break;
+    const cornerSpeed = track.apexSpeed[turnIndex] * race.cornerFactor[turnIndex];
+    const isInCorner = distance >= track.cornerStart[turnIndex];
     if (wasBraking && !isInCorner && speed > previousSpeed) return false;
     if (race.isBraking[0] === 1) wasBraking = true;
     if (isInCorner && speed > cornerSpeed + brakingStep) return false;
@@ -1487,7 +1493,7 @@ function cornerTests(check) {
   }
   check('Corners: each held speed and length follow the corner\'s sharpness, within the ranges',
     isShapeOk, shapeDetail.join('; '));
-  check('Corners: a car brakes on the straight to the corner speed and holds it through the bend',
+  check('Corners: a car brakes on the straight to the corner speed, holds it to the apex, builds',
     isProfileOk, 'three seeds, the first car tick by tick');
 }
 

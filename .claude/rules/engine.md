@@ -60,8 +60,10 @@ decision log).
   and fast), brakes on the straight as late as `brakingPerSec` allows to reach the corner speed
   where the bend starts (`planSpeed`: v² = u² + 2·a·s, one tick of travel taken off so the
   discrete step never arrives over speed; once braking it never reopens the throttle before the
-  corner), holds that speed through the corner and builds again from its end (Rich, 2026-11-02:
-  slow at the very end of the straight, not in the corner). The straights scale so the nominal
+  corner), holds that speed to the apex and builds again from the apex out, while the road is
+  still straightening (Rich, 2026-11-02: slow at the very end of the straight, not in the
+  corner; the throttle opens at the apex). `turnIndex` moves on at the apex, so the next
+  corner's braking is in view from there. The straights scale so the nominal
   car (every factor 1.0) crosses at the duration to within a tick, the scale found by bisection
   (Claude's call: a formula can't follow the speed profile); the finish line is where that car
   is at the last tick. The nominal car runs the same `planSpeed` and `limitSpeed` as the race.

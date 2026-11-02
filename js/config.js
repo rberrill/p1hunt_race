@@ -6,7 +6,7 @@
 // what a car at cruise speed covers in one second, so a straight of 3 units is a 3 s straight.
 
 export const CONFIG = {
-  appVersion: '0.1.0-dev.21',
+  appVersion: '0.1.0-dev.22',
   storageKey: 'p1hunt.race.v1',
 
   // Race time (not overridable: it is the definition of race time)
@@ -33,7 +33,7 @@ export const CONFIG = {
   longStraightsMax: 3,
   longStraightRatio: 3,
   straightJitter: 0.25,
-  apexSpeedMin: 0.4,
+  apexSpeedMin: 0.5,
   apexSpeedMax: 0.75,
   cornerUnitsMin: 0.5,
   cornerUnitsMax: 1.3,
@@ -44,8 +44,9 @@ export const CONFIG = {
   // 1.0) are what set a car apart, and how fast speed can change. On a straight a car builds
   // from cruise (1.0, the track unit) toward straightTopSpeed at accelerationPerSec; it brakes
   // at brakingPerSec on the straight, as late as that rate allows, to reach the corner's speed
-  // where the bend starts, holds it through the bend and builds again from where the road
-  // straightens (Rich, 2026-11-02: slow at the very end of the straight, not in the corner)
+  // where the bend starts, holds it to the apex and builds again from the apex out (Rich,
+  // 2026-11-02: slow at the very end of the straight, not in the corner; the throttle opens
+  // at the apex; the floor raised from 0.4 the same day, "too slow across the board")
   launchSpread: 0.15,
   checkpointsPerStraight: 3,
   checkpointSpread: 0.12,
