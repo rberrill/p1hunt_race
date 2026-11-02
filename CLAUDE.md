@@ -61,6 +61,15 @@ All from the product definition, decided with Rich on 2026-11-01 unless marked o
 - **A top speed on the straights** (Rich, 2026-11-01): `straightTopSpeed` 1.5 × cruise (1.8 was tried on the phone and felt see-saw into and out of the corners), reached at 1.0/s and braked from at 4/s into a 0.6-unit exit zone's turn, so a straight is where speed builds and the straights between 2–3 turns in 10 s are long enough to read (about twice their earlier length). The straight scale is bisected to fit the duration (Claude's call).
 - Claude's interface calls (2026-11-01, open to objection): a Tuned link chip in every header while link settings are in effect; a frame gap over `maxFrameGapMs` is dropped from the race clock (a stalled device never bursts ticks); the other-version warning sits on Control's back line after Resume, where Start race is the re-run (the Winner screen's Re-run only follows a race just run by this version); Copy result is hidden, not disabled, without a clipboard; exports are named `p1hunt-race-<seed>-<yyyymmdd-hhmm>`.
 
+## Follow-ups before the next version
+
+Open points from the 0.1 design-and-build pass, each still to be decided with Rich before any version after 0.1 starts (Rich, 2026-11-02: listed here as the gate). Remove a line when it is settled, and log the call in the decision-log.
+
+- **Very long names in the top three tower rows** are cut with an ellipsis; the small rows never cut a name. Decide: shrink the name to fit, like the Winner hero, or accept the cut.
+- **A bunched field flashes many tower rows at once** on a refresh, when a few cars trade several places in 1.5 s. Decide: flash only the top rows, flash less often, or accept it.
+- **`towerMaxRows`** is kept as a link-only cap at 100 (Claude's call); the rows already flow to the bottom. Decide: keep it or remove it.
+- **33 small rows on a phone** with a 75-car field is dense. Decide against the OBS and second-phone captures in section 7 of UAT-0.1 before changing anything.
+
 ## Map
 
 | Where | What |
