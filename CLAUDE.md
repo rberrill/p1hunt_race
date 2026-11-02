@@ -70,6 +70,9 @@ Open points from the 0.1 design-and-build pass, each still to be decided with Ri
 - **A bunched field flashes many tower rows at once** on a refresh, when a few cars trade several places in 1.5 s. Decide: flash only the top rows, flash less often, or accept it.
 - **`towerMaxRows`** is kept as a link-only cap at 100 (Claude's call); the rows already flow to the bottom. Decide: keep it or remove it.
 - **33 small rows on a phone** with a 75-car field is dense. Decide against the OBS and second-phone captures in section 7 of UAT-0.1 before changing anything.
+- **The dark accent and the dark-red car** (from the car pass, 2026-11-02): the dark grey accent on a dozen's pods and endplates, and the red accent on the dark-red twelfth color (car 60 in a 75-car field), are the two low-contrast liveries. Judge both on the section 7 captures; if either vanishes, change the accent, not the car.
+- **The 75-car frame rate on the phone** with the heavier car (about three times the draw calls of the dev.19 car) is only judged by eye (P3.17); the hook can't measure the GPU side. If the pack stutters, the first lever is `CAR_DETAIL_MIN_PX` in `stage.js`.
+- **The test hook's `frameAt` after `reset()`** draws the road without cars once the clock is stepped on from zero (seen on 2026-11-02 while verifying dev.20; a single `frameAt` straight after `startRace` draws them). It is a hook quirk, not the app; find the cause before `verify` leans on stepped frames.
 
 ## Map
 
