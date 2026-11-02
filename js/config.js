@@ -6,7 +6,7 @@
 // what a car at cruise speed covers in one second, so a straight of 3 units is a 3 s straight.
 
 export const CONFIG = {
-  appVersion: '0.1.0-dev.31',
+  appVersion: '0.1.0-dev.32',
   storageKey: 'p1hunt.race.v1',
 
   // Race time (not overridable: it is the definition of race time)
@@ -54,7 +54,10 @@ export const CONFIG = {
   // at the apex; the floor raised from 0.4 the same day, "too slow across the board"; braking
   // 4/s → 2/s the same day, so the braking zone is long enough to read on the stage)
   launchSpread: 0.15,
-  checkpointsPerStraight: 3,
+  // Speed checkpoints per unit of straight, at least one per straight (Rich, 2026-11-02: a
+  // count per straight left a long straight with no new draw for most of its length, so the
+  // order froze there; a short straight of about two units keeps about three checkpoints)
+  checkpointsPerUnit: 1.5,
   checkpointSpread: 0.12,
   cornerSpread: 0.15,
   straightTopSpeed: 1.5,
@@ -118,7 +121,7 @@ export const CONFIG_LIMITS = {
   cornerUnitsMax: [0.2, 4],
   cornerLengthJitter: [0, 0.5],
   launchSpread: [0, 0.5],
-  checkpointsPerStraight: [1, 8],
+  checkpointsPerUnit: [0.2, 10],
   checkpointSpread: [0, 0.3],
   cornerSpread: [0, 0.3],
   straightTopSpeed: [1, 3],

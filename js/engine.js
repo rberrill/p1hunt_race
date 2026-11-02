@@ -5,7 +5,7 @@
 // max, imul and shifts), so the same inputs give the same finish on every device.
 //
 // Sections: RANDOM, TEXT, ENTRANTS, TRACK, RACE, RESULT, SANITIZERS, SELF-TEST.
-import { CONFIG, CONFIG_LIMITS } from './config.js?v=0.1.0-dev.31';
+import { CONFIG, CONFIG_LIMITS } from './config.js?v=0.1.0-dev.32';
 
 /* ==== RANDOM ==== */
 
@@ -602,8 +602,8 @@ const BASE_PACE = 1;
 function drawCarCheckpoints(seedText, carIndex, track, config) {
   const random = createRandom(seedText, `car:${carIndex}`);
   const pace = BASE_PACE;
-  const perStraight = Math.max(1, Math.round(config.checkpointsPerStraight));
-  const count = 1 + (track.turnCount + 1) * perStraight;
+  let count = 1;
+  for (let i = 0; i <= track.turnCount; i++) count += checkpointsOn(track, i, config);
   const distance = new Float64Array(count);
   const factor = new Float64Array(count);
   const cornerFactor = new Float64Array(track.turnCount);
@@ -613,6 +613,7 @@ function drawCarCheckpoints(seedText, carIndex, track, config) {
   let next = 1;
   for (let i = 0; i <= track.turnCount; i++) {
     const first = next;
+    const perStraight = checkpointsOn(track, i, config);
     for (let j = 0; j < perStraight; j++) {
       const along = random.nextBetween(track.straightStart[i], track.straightEnd[i]);
       const spread = random.nextBetween(-config.checkpointSpread, config.checkpointSpread);
@@ -633,6 +634,16 @@ function drawCarCheckpoints(seedText, carIndex, track, config) {
   }
   const tiebreak = random.nextFloat();
   return { distance, factor, cornerFactor, exitQuality, tiebreak };
+}
+
+/**
+ * checkpointsOn(track, straightIndex, config) → how many speed checkpoints straight i gets:
+ * `checkpointsPerUnit` times its length, rounded, at least one (Rich, 2026-11-02: a fixed count
+ * per straight froze the order down a long one).
+ */
+function checkpointsOn(track, straightIndex, config) {
+  const length = track.straightEnd[straightIndex] - track.straightStart[straightIndex];
+  return Math.max(1, Math.round(length * config.checkpointsPerUnit));
 }
 
 /**
@@ -1278,7 +1289,7 @@ const LAST_CAR_LATEST_SHARE = 1.15;
 // proof that the engine's arithmetic is identical across engines; a tuning change moves it, and
 // that is a user-visible change (a new version), so the constant is updated with the version.
 const REFERENCE_SEED = 'P1HUNT';
-const REFERENCE_FINGERPRINT = 'a6f0bd25';
+const REFERENCE_FINGERPRINT = '80fdcf7a';
 
 /**
  * testEntrants(count) → [{ name }], `count` distinct names.
@@ -1651,6 +1662,20 @@ function raceTests(check) {
       && longCount <= CONFIG.longStraightsMax
       && layout.finishUnits > layout.turns[layout.turns.length - 1].cornerEnd,
     `${layout.turns.length} turns, ${longCount} long straights`);
+  let expectedCheckpoints = 1;
+  let shortest = Infinity;
+  let longest = 0;
+  for (let i = 0; i <= fresh.track.turnCount; i++) {
+    const length = fresh.track.straightEnd[i] - fresh.track.straightStart[i];
+    const onStraight = Math.max(1, Math.round(length * CONFIG.checkpointsPerUnit));
+    expectedCheckpoints += onStraight;
+    shortest = Math.min(shortest, onStraight);
+    longest = Math.max(longest, onStraight);
+  }
+  const drawnCheckpoints = fresh.checkpointEnd[0] - fresh.checkpointStart[0];
+  check('Track: checkpoints follow the straight\'s length, at least one, more on a long one',
+    drawnCheckpoints === expectedCheckpoints && shortest >= 1 && longest > shortest,
+    `${drawnCheckpoints} checkpoints, ${shortest} to ${longest} per straight`);
   const refused = [];
   const attempts = [
     ['1 entrant', { entrants: testEntrants(1), seed: 'x', durationSec: 30 }],

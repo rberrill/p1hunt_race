@@ -73,7 +73,8 @@ decision log).
 - **Cars (Rich):** the same base pace for every car, always (`BASE_PACE`, not a tunable); a
   standing start on one line, no grid rows (the stage may draw depth, the engine gives no head
   start); per car a launch factor and checkpoints along each straight scaling the straight's
-  target, and a corner factor per corner scaling the speed it holds there (drawn apart from the
+  target (`checkpointsOn`: `checkpointsPerUnit` times the straight's length, at least one; Rich,
+  2026-11-02: a fixed count per straight froze the order down a long one), and a corner factor per corner scaling the speed it holds there (drawn apart from the
   checkpoints, because the braking decision needs it before the corner), each a spread around
   1.0 from `CONFIG`. Speed moves toward the planned speed by at most the acceleration or
   braking rate per tick. **Corner exits** (Rich, 2026-11-02): per car and corner a seeded exit
@@ -82,8 +83,7 @@ decision log).
   the car's `exitFactor` to 1 + `exitSpread` × quality, which scales its acceleration step until
   the next apex. Braking is never scaled. The nominal car has no exits, so the duration promise
   is untouched. Measured over eight seeds: the exits alone add about one leader change per race;
-  the long straights lose more, because `checkpointsPerStraight` is per straight, not per unit
-  (open with Rich, 2026-11-02).
+  the per-unit checkpoints are what keep the order moving down the long straights.
 - **Finish (Rich):** every car crosses; the crossing time is the tick plus a linear sub-tick
   fraction; a dead heat goes to the car's seeded tiebreak, then list order. `maxRaceSec` is
   only a guard. Times are kept to the millisecond.
