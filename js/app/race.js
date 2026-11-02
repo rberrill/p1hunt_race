@@ -11,7 +11,7 @@ import {
   raceSnapshot,
   trackLayout,
   finishResult,
-} from '../engine.js?v=0.1.0-dev.32';
+} from '../engine.js?v=0.1.0-dev.33';
 import {
   app,
   byId,
@@ -21,7 +21,7 @@ import {
   announce,
   formatRaceTime,
   phoneMedia,
-} from './core.js?v=0.1.0-dev.32';
+} from './core.js?v=0.1.0-dev.33';
 import {
   initStage,
   resizeStage,
@@ -29,7 +29,7 @@ import {
   drawFrame,
   drawStill,
   carColor,
-} from './stage.js?v=0.1.0-dev.32';
+} from './stage.js?v=0.1.0-dev.33';
 
 // The timing tower and the HUD text are rewritten at most this often (frame time).
 const PANEL_INTERVAL_MS = 100;
@@ -121,7 +121,7 @@ export function startRace(inputs) {
   setTowerHeld(!app.isReducedMotion);
   towerDueMs = 0;
   setText('hudSeed', app.race.seed);
-  setText('hudElapsed', formatRaceTime(0, 1));
+  setText('hudElapsed', formatRaceTime(app.race.durationSec, 1));
   showPhase('race');
   onStageResize();
   if (app.isReducedMotion) {
@@ -362,11 +362,13 @@ function lightsLit(clockMs) {
 }
 
 /**
- * updateHud(snapshot, frameTimeMs) → elapsed race time; the leader is announced to the live
- * region now and then (the tower's first row shows it).
+ * updateHud(snapshot, frameTimeMs) → the session clock: the duration counting down from lights
+ * out, held at 0:00.0 once passed while the tail crosses (Rich, 2026-11-02: the clock at the top
+ * is the session time; each car's finish time counts up and is what the results report). The
+ * leader is announced to the live region now and then (the tower's first row shows it).
  */
 function updateHud(snapshot, frameTimeMs) {
-  setText('hudElapsed', formatRaceTime(snapshot.elapsedSec, 1));
+  setText('hudElapsed', formatRaceTime(app.race.durationSec - snapshot.elapsedSec, 1));
   if (snapshot.tick === 0) return;
   const leaderName = app.race.displayNames[snapshot.leader];
   if (frameTimeMs >= announceDueMs) {
@@ -631,10 +633,8 @@ function renderReveal(revealedCount) {
     towerRows[car].hidden = !isShown || i >= visibleSlots;
     setRowGap(car, isShown ? finishedGapText(car, winner) : '', i === 0 && isShown);
   }
-  const isWinnerShown = firstShown === 0;
-  setText('hudElapsed', isWinnerShown
-    ? formatRaceTime(app.race.finishTick[winner] / app.config.ticksPerSecond, 1)
-    : formatRaceTime(0, 1));
+  // The session is over before the reveal starts; the winner's time is in its tower row.
+  setText('hudElapsed', formatRaceTime(0, 1));
 }
 
 /**
