@@ -6,7 +6,7 @@
 // what a car at cruise speed covers in one second, so a straight of 3 units is a 3 s straight.
 
 export const CONFIG = {
-  appVersion: '0.1.0-dev.38',
+  appVersion: '0.1.0-dev.39',
   storageKey: 'p1hunt.race.v1',
 
   // Race time (not overridable: it is the definition of race time)
@@ -94,11 +94,11 @@ export const CONFIG = {
   // past faster at the same speed (Rich, 2026-11-02; 0.25 and 0.5 before). Look only
   kerbUnits: 0.15,
   dashUnits: 0.3,
-  // Braking boards on the outside verge before each corner, boardCount of them boardUnits
-  // apart, the nearest with one bar: the trackside parallax the stage otherwise lacks, and a
-  // mark for the braking zone (Rich, 2026-11-02). 0 boards for none. Look only
+  // Braking boards on the outside verge before each corner, boardCount of them, the nearest
+  // with one bar: the trackside parallax the stage otherwise lacks, and a mark for the
+  // braking zone (Rich, 2026-11-02). 0 boards for none. Their spacing is a stage constant
+  // (Rich, 2026-11-02: not a tunable). Look only
   boardCount: 3,
-  boardUnits: 1,
   labelMinWidthPx: 28,
   // A pack label is drawn only once its spot has been clear this long, and then holds the
   // spot against newer names (Rich, 2026-11-02: the names popped in and out too fast to
@@ -149,7 +149,6 @@ export const CONFIG_LIMITS = {
   kerbUnits: [0.05, 2],
   dashUnits: [0.1, 4],
   boardCount: [0, 6],
-  boardUnits: [0.2, 5],
   labelMinWidthPx: [0, 200],
   labelShowDelayMs: [0, 3000],
   towerMaxRows: [3, 100],

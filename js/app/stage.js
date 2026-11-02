@@ -135,8 +135,12 @@ const BEND_STEP_UNITS = 0.1;
 const KERB_WIDTH_FRACTION = 0.07;
 const DASH_WIDTH_FRACTION = 0.02;
 // Braking boards (Rich, 2026-11-02): a post on the outside verge with a white board carrying
-// red bars, 3, 2, 1 toward the corner. Sizes are shares of the road's half-width at the
-// board's depth, so they scale with perspective like the cars (Claude's proportions).
+// red bars, 3, 2, 1 toward the corner, BOARD_SPACING_UNITS apart before the corner's start
+// (Rich, 2026-11-02: close together and close to the corner, a constant rather than a
+// tunable; a unit apart they reached into the corner before). Sizes are shares of the road's
+// half-width at the board's depth, so they scale with perspective like the cars (Claude's
+// proportions).
+const BOARD_SPACING_UNITS = 0.35;
 const BOARD_OFFSET_FRACTION = 1.35;
 const BOARD_WIDTH_FRACTION = 0.22;
 const BOARD_HEIGHT_RATIO = 0.75;
@@ -544,20 +548,22 @@ function drawRoad() {
 
 /**
  * drawBoards() → the braking boards before every corner in view: `boardCount` of them,
- * `boardUnits` apart on the straight before the corner's start, on the outside verge (the
- * side away from the turn), far to near so a near board paints over a far one. A board that
- * would stand before the start line is not drawn. Far boards fade with the road.
+ * BOARD_SPACING_UNITS apart on the straight before the corner's start, on the outside verge
+ * (the side away from the turn), far to near so a near board paints over a far one. A board
+ * that would stand before the start line, or inside the corner before (where the road may
+ * bend the other way, putting it on the inside), is not drawn. Far boards fade with the road.
  */
 function drawBoards() {
-  const { boardCount, boardUnits, cameraNearUnits, roadViewUnits } = scene.config;
+  const { boardCount, cameraNearUnits, roadViewUnits } = scene.config;
   if (boardCount <= 0) return;
   const { turns } = scene.layout;
   const fadeStart = ROAD_STRIPS * (1 - ROAD_FADE_FRACTION);
   for (let i = turns.length - 1; i >= 0; i--) {
     const turn = turns[i];
+    const straightStart = i === 0 ? 0 : turns[i - 1].cornerEnd;
     for (let bars = boardCount; bars >= 1; bars--) {
-      const trackUnits = turn.cornerStart - bars * boardUnits;
-      if (trackUnits < 0) continue;
+      const trackUnits = turn.cornerStart - bars * BOARD_SPACING_UNITS;
+      if (trackUnits < straightStart) continue;
       const depth = trackUnits - camera.units;
       if (depth < cameraNearUnits || depth > roadViewUnits) continue;
       const stripIndex = stripIndexFor(depth);

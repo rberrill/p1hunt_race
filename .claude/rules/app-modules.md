@@ -32,7 +32,7 @@ paths:
 - `js/config.js`: `CONFIG` (every tunable, `appVersion`, `storageKey`) and `CONFIG_LIMITS` (the
   link-overridable keys with their ranges). The shell's tunables (`startCountdownSec`,
   `finishHoldMs`, `revealSec`, `maxFrameGapMs`, the camera's units, the road texture
-  (`kerbUnits`, `dashUnits`) and the braking boards (`boardCount`, `boardUnits`),
+  (`kerbUnits`, `dashUnits`) and the braking boards (`boardCount`; their spacing is a stage constant),
   `labelMinWidthPx`, `labelShowDelayMs`, `reducedMotion`, `saveDebounceMs`) sit after the engine's.
 - `js/app/main.js`: the entry. Link settings through `sanitizeOverrides`; the saved session and
   the Resume card; the phase loop (Start race → the race → the record saved → the Winner screen →
