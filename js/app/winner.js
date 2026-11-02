@@ -1,8 +1,8 @@
 // The Winner phase: the winner large, the full finish order with times, the exports (CSV, JSON,
 // Copy result where the clipboard exists) and the two ways out: Re-run this race (identical
 // result) and Start over (list kept, new seed).
-import { CONFIG } from '../config.js?v=0.1.0-dev.24';
-import { resultToCsv, resultToJson } from '../engine.js?v=0.1.0-dev.24';
+import { CONFIG } from '../config.js?v=0.1.0-dev.25';
+import { resultToCsv, resultToJson } from '../engine.js?v=0.1.0-dev.25';
 import {
   app,
   byId,
@@ -14,7 +14,7 @@ import {
   formatSavedAt,
   fileStamp,
   phoneMedia,
-} from './core.js?v=0.1.0-dev.24';
+} from './core.js?v=0.1.0-dev.25';
 
 // The phone shows this many places before "Show all" (from the wireframe).
 const PHONE_FINISH_PREVIEW = 8;

@@ -899,11 +899,11 @@ function isBoxFree(left, right, top, bottom, accepted) {
 }
 
 /**
- * drawCars(snapshot) → every car in view, far to near so the near ones overlap, each at its
- * lane across the road; labels on the cars drawn at least labelMinWidthPx wide and always on
- * the top three of the live order (Rich, 2026-11-01).
+ * drawCars(snapshot, isLabelled) → every car in view, far to near so the near ones overlap,
+ * each at its lane across the road; when `isLabelled`, labels on the cars drawn at least
+ * labelMinWidthPx wide and always on the top three of the live order (Rich, 2026-11-01).
  */
-function drawCars(snapshot) {
+function drawCars(snapshot, isLabelled) {
   const near = scene.config.cameraNearUnits;
   const far = scene.config.viewDepthUnits;
   const carWidthNear = roadHalfWidthNearPx() * 2 * CAR_WIDTH_FRACTION;
@@ -920,7 +920,7 @@ function drawCars(snapshot) {
     const widthPx = carWidthNear * scale;
     drawCar(x, y, widthPx, car);
     const isTop = i < TOP_LABEL_COUNT;
-    if ((isTop || widthPx >= labelMin) && labels.count < MAX_CARS) {
+    if (isLabelled && (isTop || widthPx >= labelMin) && labels.count < MAX_CARS) {
       labels.car[labels.count] = car;
       labels.x[labels.count] = x;
       labels.y[labels.count] = y;
@@ -955,27 +955,16 @@ function lightsGeometry() {
 }
 
 /**
- * lightsBandPx() → { topPx, bottomPx }: the rows of the stage the start lights' box occupies,
- * so the shell can tell which tower rows are beside it.
+ * drawLights(litCount) → the start lights over the road: three discs, `litCount` of them red,
+ * drawn while the countdown runs and for a moment after they go out, centred on the road at
+ * the start line (nothing else is on the stage then: the tower is held until after lights
+ * out; Rich, 2026-11-02).
  */
-export function lightsBandPx() {
-  const geometry = lightsGeometry();
-  return { topPx: geometry.boxTop, bottomPx: geometry.boxTop + geometry.boxHeight };
-}
-
-/**
- * drawLights(litCount, clearRightPx) → the start lights over the road: three discs, `litCount`
- * of them red, drawn while the countdown runs and for a moment after they go out, centred on
- * the road at the start line. `clearRightPx` is how far the timing tower's rows beside the
- * lights reach into the stage (0 for none); only when the centred box would overlap them is
- * it pushed right, as far as it takes, so the two never overlap (Rich, 2026-11-01).
- */
-function drawLights(litCount, clearRightPx) {
+function drawLights(litCount) {
   const { ctx } = view;
   const { diameter, gap, totalWidth, boxTop, boxHeight, centredLeft } = lightsGeometry();
   const top = boxTop + gap / 2;
-  const clearLeft = clearRightPx > 0 ? clearRightPx + gap * 2 : 0;
-  const left = Math.min(view.width - totalWidth - gap, Math.max(centredLeft, clearLeft));
+  const left = centredLeft;
   ctx.fillStyle = COLOR_TYRE;
   ctx.fillRect(left - gap, boxTop, totalWidth + gap * 2, boxHeight);
   for (let i = 0; i < LIGHT_COUNT; i++) {
@@ -997,9 +986,9 @@ export function carColor(car) {
 }
 
 /**
- * drawFrame(snapshot, options) → one frame: { frameDeltaSec, lightsLit, lightsClearPx } where
- * lightsLit is -1 for no lights, else how many of the three are red, and lightsClearPx is how
- * far the tower's rows beside the lights reach into the stage (0 for none).
+ * drawFrame(snapshot, options) → one frame: { frameDeltaSec, lightsLit, isLabelled } where
+ * lightsLit is -1 for no lights, else how many of the three are red, and isLabelled says
+ * whether the cars carry their names (held back with the tower after the start).
  */
 export function drawFrame(snapshot, options) {
   const { ctx } = view;
@@ -1009,8 +998,8 @@ export function drawFrame(snapshot, options) {
   drawBackground();
   drawRoad();
   drawFinishLine();
-  drawCars(snapshot);
-  if (options.lightsLit >= 0) drawLights(options.lightsLit, options.lightsClearPx || 0);
+  drawCars(snapshot, options.isLabelled);
+  if (options.lightsLit >= 0) drawLights(options.lightsLit);
 }
 
 /**

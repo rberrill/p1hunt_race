@@ -419,6 +419,9 @@ input[type="range"] {
   transition: top 400ms ease-in-out, height 400ms ease-in-out, font-size 400ms ease-in-out;
 }
 .tower-rows.is-instant li { transition: none; }
+/* Held through the countdown and the first refresh interval (Rich, 2026-11-02); the box
+   keeps its size so the fit can measure it. */
+.tower.is-held { visibility: hidden; }
 .tower-rows .place {
   flex: none;
   width: 1.6em;

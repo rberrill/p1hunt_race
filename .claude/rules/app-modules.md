@@ -54,7 +54,8 @@ paths:
   "+ n more" as the last line only then (`towerMaxRows` is a link-only cap); three major slots
   then small minor ones (full name, gap beside it); refreshed every `towerRefreshMs` with a
   green or red flash on a place gained or lost; the gap is distance divided by the trailing
-  car's speed), the finish hold, the reduced-motion reveal. Exports `runToEnd` and `frameAt` for the
+  car's speed; held out of sight, with the names on the cars, until the race clock reaches the
+  first refresh interval after lights out), the finish hold, the reduced-motion reveal. Exports `runToEnd` and `frameAt` for the
   test hook. `startRace` resets the play state first: a race left mid-run (the test hook can do
   it) would otherwise leave `isPlaying` set and the new race would never get a frame.
 - `js/app/stage.js`: the canvas. The perspective road from `trackLayout` (drawn `roadViewUnits`

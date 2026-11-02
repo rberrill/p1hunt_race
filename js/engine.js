@@ -5,7 +5,7 @@
 // max, imul and shifts), so the same inputs give the same finish on every device.
 //
 // Sections: RANDOM, TEXT, ENTRANTS, TRACK, RACE, RESULT, SANITIZERS, SELF-TEST.
-import { CONFIG, CONFIG_LIMITS } from './config.js?v=0.1.0-dev.24';
+import { CONFIG, CONFIG_LIMITS } from './config.js?v=0.1.0-dev.25';
 
 /* ==== RANDOM ==== */
 

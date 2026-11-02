@@ -11,7 +11,7 @@ import {
   raceSnapshot,
   trackLayout,
   finishResult,
-} from '../engine.js?v=0.1.0-dev.24';
+} from '../engine.js?v=0.1.0-dev.25';
 import {
   app,
   byId,
@@ -21,7 +21,7 @@ import {
   announce,
   formatRaceTime,
   phoneMedia,
-} from './core.js?v=0.1.0-dev.24';
+} from './core.js?v=0.1.0-dev.25';
 import {
   initStage,
   resizeStage,
@@ -29,8 +29,7 @@ import {
   drawFrame,
   drawStill,
   carColor,
-  lightsBandPx,
-} from './stage.js?v=0.1.0-dev.24';
+} from './stage.js?v=0.1.0-dev.25';
 
 // The timing tower and the HUD text are rewritten at most this often (frame time).
 const PANEL_INTERVAL_MS = 100;
@@ -55,6 +54,10 @@ let onRaceFinished = null;
 let frameHandle = 0;
 let panelDueMs = 0;
 let towerDueMs = 0;
+// The tower and the names on the cars are held back through the countdown and the first
+// refresh interval of the race, on purpose (Rich, 2026-11-02): the field gets a moment to
+// leave the line and spread before the places show.
+let isTowerHeld = false;
 let announceDueMs = 0;
 // The tower is one row per car (indexed by car), each sitting at the slot of its place and
 // sliding to a new slot when its place changes (Rich, 2026-11-02); the slots are arithmetic
@@ -115,6 +118,7 @@ export function startRace(inputs) {
   app.finishedAtClockMs = null;
   setScene(trackLayout(app.race), app.race.displayNames, app.config);
   buildTower();
+  setTowerHeld(!app.isReducedMotion);
   towerDueMs = 0;
   setText('hudSeed', app.race.seed);
   setText('hudElapsed', formatRaceTime(0, 1));
@@ -293,48 +297,55 @@ function onFrame(frameTimeMs) {
 
 /**
  * drawCurrentFrame(frameTimeMs, tickFraction, clockMs) → the snapshot drawn with the lights
- * state, then the HUD and the tower at their own pace.
+ * state, then the HUD and the tower at their own pace. The tower and the names stay held
+ * until the race clock reaches the first refresh interval after lights out (Rich, 2026-11-02);
+ * the clock, not the frame time, so a pause in the countdown holds them too.
  */
 function drawCurrentFrame(frameTimeMs, tickFraction = 0, clockMs = raceClockMs(frameTimeMs)) {
   const snapshot = raceSnapshot(app.race, tickFraction);
   const frameDeltaSec = Math.min(0.1, Math.max(0, (frameTimeMs - lastDrawMs) / 1000));
   lastDrawMs = frameTimeMs;
-  const lit = lightsLit(clockMs);
+  const isHeld = clockMs < app.config.towerRefreshMs;
   drawFrame(snapshot, {
     frameDeltaSec,
-    lightsLit: lit,
-    lightsClearPx: lit >= 0 ? towerRightBeside(lightsBandPx()) : 0,
+    lightsLit: lightsLit(clockMs),
+    isLabelled: !isHeld,
   });
   if (frameTimeMs >= panelDueMs) {
     panelDueMs = frameTimeMs + PANEL_INTERVAL_MS;
     updateHud(snapshot, frameTimeMs);
   }
-  if (frameTimeMs >= towerDueMs) {
+  if (isHeld) return;
+  if (isTowerHeld) {
     towerDueMs = frameTimeMs + app.config.towerRefreshMs;
-    updateTower(snapshot);
+    revealTower(snapshot);
+  } else if (frameTimeMs >= towerDueMs) {
+    towerDueMs = frameTimeMs + app.config.towerRefreshMs;
+    updateTower(snapshot, true);
   }
 }
 
 /**
- * towerRightBeside(band) → how far the timing tower's visible rows (or its "+ n more" line)
- * that lie within `band` ({ topPx, bottomPx }, stage rows) reach into the stage from its left
- * edge, 0 when none does; the lights keep clear of that. The rows are measured, not the
- * tower's box: the box runs the stage's height and the small rows are narrow.
+ * setTowerHeld(isHeld) → the tower kept out of sight (its box stays, so the fit still
+ * measures) or shown.
  */
-function towerRightBeside(band) {
-  const wrap = byId('stageWrap').getBoundingClientRect();
-  const more = byId('towerMore');
-  const lines = more.hidden ? towerRows : towerRows.concat([more]);
-  let rightPx = 0;
-  for (let i = 0; i < lines.length; i++) {
-    if (lines[i].hidden) continue;
-    const rect = lines[i].getBoundingClientRect();
-    const top = rect.top - wrap.top;
-    const bottom = rect.bottom - wrap.top;
-    if (bottom <= band.topPx || top >= band.bottomPx) continue;
-    rightPx = Math.max(rightPx, rect.right - wrap.left);
-  }
-  return rightPx;
+function setTowerHeld(isHeld) {
+  isTowerHeld = isHeld;
+  byId('tower').classList.toggle('is-held', isHeld);
+}
+
+/**
+ * revealTower(snapshot) → the tower's first appearance: every row already at the slot of its
+ * place, with no slide from the list order and no flash (there is no earlier order to have
+ * moved from), then shown and live.
+ */
+function revealTower(snapshot) {
+  const list = byId('towerRows');
+  list.classList.remove('is-live');
+  updateTower(snapshot, false);
+  void list.offsetHeight;
+  list.classList.add('is-live');
+  setTowerHeld(false);
 }
 
 /**
@@ -487,13 +498,14 @@ function finishedGapText(car, winner) {
 }
 
 /**
- * updateTower(snapshot) → every row follows the live order, at the tower's refresh interval.
- * The gap is blank before lights out and on the leader's row; a running car shows its distance
- * to the leader divided by its own speed; a crossed car its exact gap to the winner (the
- * winner, its time). A car whose place changed since the last refresh slides to its new slot
- * (Rich, 2026-11-02) and flashes its row green for a place gained, red for one lost.
+ * updateTower(snapshot, isFlashed) → every row follows the live order, at the tower's refresh
+ * interval. The gap is blank before lights out and on the leader's row; a running car shows
+ * its distance to the leader divided by its own speed; a crossed car its exact gap to the
+ * winner (the winner, its time). A car whose place changed since the last refresh slides to
+ * its new slot (Rich, 2026-11-02) and, when `isFlashed`, flashes its row green for a place
+ * gained, red for one lost.
  */
-function updateTower(snapshot) {
+function updateTower(snapshot, isFlashed = true) {
   const { order, leader } = snapshot;
   const isStarted = snapshot.tick > 0;
   const winner = app.race.finishOrder[0];
@@ -502,7 +514,7 @@ function updateTower(snapshot) {
     const lastPlace = rowSlot[car];
     if (lastPlace !== i) {
       placeRow(car, i);
-      if (isStarted) flashRow(towerRows[car], i < lastPlace ? 'is-up' : 'is-down');
+      if (isFlashed) flashRow(towerRows[car], i < lastPlace ? 'is-up' : 'is-down');
     }
     let gapText = '';
     if (isStarted && app.race.place[car] > 0) {
