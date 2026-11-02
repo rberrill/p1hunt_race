@@ -1,9 +1,10 @@
 // The stage: everything drawn on the race canvas, from a snapshot and the track layout. A
 // pseudo-3D road receding to a horizon in the Pole Position manner, bending through the turn
-// zones; cars seen from behind, drawn from primitives in the brand palette and recolored per
-// entrant; the finish band; the start lights. Drawing is cosmetic: nothing here feeds back into
-// the race (Rich, 2026-11-01: code-drawn vectors for 0.1; the camera follows the leader and
-// parks at the finish line; labels only on cars drawn wide enough).
+// zones; cars seen from behind, drawn from primitives in a color and an accent per entrant
+// (Option B of the 2026-11-02 mockup, Rich's pick); the finish band; the start lights. Drawing
+// is cosmetic: nothing here feeds back into the race (Rich, 2026-11-01: code-drawn vectors for
+// 0.1; the camera follows the leader and parks at the finish line; labels only on cars drawn
+// wide enough).
 //
 // Sections: SETUP, CAMERA, ROAD, CARS, LIGHTS, FRAME.
 
@@ -18,6 +19,11 @@ const COLOR_KERB_RED = '#e5322d';
 const COLOR_KERB_WHITE = '#e8e8ea';
 const COLOR_LINE = '#e8e8ea';
 const COLOR_TYRE = '#0c0c0e';
+const COLOR_TREAD = '#2c2c31';
+const COLOR_CAR_DARK = '#232327';
+const COLOR_HELMET = '#e8e8ea';
+const COLOR_MIX_WHITE = '#ffffff';
+const COLOR_MIX_BLACK = '#000000';
 const COLOR_LABEL_BG = 'rgba(22, 22, 24, 0.82)';
 const COLOR_LABEL_TEXT = '#e8e8ea';
 const COLOR_LIGHT_ON = '#e5322d';
@@ -27,6 +33,78 @@ const CAR_COLORS = [
   '#e5322d', '#e8e8ea', '#f2c230', '#2f7de1', '#3fb950', '#f07a1c',
   '#2bc4d6', '#e85aa0', '#8e5be8', '#9c9ca4', '#b7e23a', '#c0392b',
 ];
+// A second color per dozen cars (Rich, 2026-11-02): the first twelve single-tone, then white,
+// dark, yellow, blue and red, so 75 cars get 72 liveries from the same twelve colors. A car
+// whose accent would equal its own color takes the next one (Claude's call). The dark accent
+// is the sky grey, not the tyres' black, so it still shows against the tarmac.
+const CAR_ACCENTS = [null, '#e8e8ea', '#161618', '#f2c230', '#2f7de1', '#e5322d'];
+// Flat shade bands, never gradients (the brand brief; Rich, 2026-11-02, for the cars): how far
+// a band lightens the car's color, and how far the wing's underside darkens it.
+const SHADE_LIGHTEN = 0.28;
+const SHADE_DARKEN = 0.45;
+// Below this drawn width the car's small parts (wishbones, strakes, exhausts, the roll hoop,
+// the rain light) are skipped: they would be under a pixel (Claude's call).
+const CAR_DETAIL_MIN_PX = 22;
+// The car's proportions: Option B of the 2026-11-02 mockup, Rich's pick (wide low pods, an
+// engine cover that hides all but the top of the helmet, a two-element wing low over the
+// cover). Widths and x offsets are shares of the drawn width, from the centre; heights and y
+// offsets are shares of the drawn height, up from the bottom; the exceptions say so.
+const CAR_SHAPE = {
+  tyreWidth: 0.23,
+  tyreHeight: 0.54,
+  tyreCorner: 0.2, // of the tyre's width
+  treadHeight: 0.14, // of the tyre's height
+  wishboneBodyX: 0.31,
+  wishboneUpperY: 0.34,
+  wishboneLowerY: 0.15,
+  wishboneUpperRise: 0.06,
+  wishboneLowerRise: 0.04,
+  wishboneWidth: 0.022,
+  diffuserHalfWidth: 0.33,
+  diffuserHeight: 0.08,
+  strakeWidth: 0.016,
+  podHalfWidth: 0.32,
+  podTopY: 0.32,
+  podBottomY: 0.05,
+  podCorner: 0.03,
+  podBandHeight: 0.08,
+  podShadeHeight: 0.05,
+  exhaustX: 0.24,
+  exhaustY: 0.16,
+  exhaustRadius: 0.03,
+  pillarInnerX: 0.08,
+  pillarWidth: 0.03,
+  pillarTopY: 0.74,
+  pillarBottomY: 0.54,
+  hoopY: 0.57,
+  hoopRadius: 0.08,
+  hoopWidth: 0.03,
+  helmetY: 0.56,
+  helmetRadius: 0.07,
+  coverBaseHalfWidth: 0.20,
+  coverBaseY: 0.30,
+  coverTopHalfWidth: 0.10,
+  coverTopY: 0.58,
+  coverShadeHeight: 0.05,
+  coverBandY: 0.46,
+  coverBandHeight: 0.07,
+  wingHalfWidth: 0.43,
+  wingTopY: 0.80,
+  wingThickness: 0.09,
+  wingShadeShare: 0.3, // of the plane's thickness
+  wingUndersideShare: 0.22, // of the plane's thickness
+  flapHalfWidth: 0.40,
+  flapGapY: 0.03,
+  flapThickness: 0.06,
+  endplateWidth: 0.035,
+  endplateTopY: 0.92,
+  endplateBottomY: 0.62,
+  rainLightWidth: 0.05,
+  rainLightInset: 0.2, // of the plane's thickness
+  rainLightHeight: 0.6, // of the plane's thickness
+};
+// Where the diffuser's strakes stand, as shares of its half-width from the centre.
+const STRAKE_POSITIONS = [-0.6, -0.2, 0.2, 0.6];
 // The horizon sits this far down the stage; the road fills the rest (Claude's call).
 const HORIZON_FRACTION = 0.38;
 // The road's half-width at the bottom edge, as a share of the stage width, capped by height so
@@ -53,7 +131,7 @@ const BEND_GAIN = 0.9;
 // A car's width at the bottom edge as a share of the road's full width there, and its height
 // as a share of its width (a rear view is wider than it is tall).
 const CAR_WIDTH_FRACTION = 0.22;
-const CAR_HEIGHT_RATIO = 0.62;
+const CAR_HEIGHT_RATIO = 0.64;
 // Labels: font size as a share of car width, within these pixel bounds.
 const LABEL_FONT_FRACTION = 0.34;
 const LABEL_FONT_MIN_PX = 10;
@@ -89,12 +167,16 @@ const view = {
   height: 0,
   pixelRatio: 1,
 };
-// The current race's static layout and per-car looks, set once per race.
+// The current race's static layout and per-car looks, set once per race: each car's color
+// (the tower's swatch), its accent (null for single-tone) and the color's shade bands.
 const scene = {
   layout: null,
   carCount: 0,
   displayNames: [],
   colors: [],
+  accents: [],
+  lightColors: [],
+  darkColors: [],
   config: null,
 };
 // Camera state (track units) and the per-strip road geometry computed each frame.
@@ -151,10 +233,31 @@ export function setScene(layout, displayNames, config) {
   scene.carCount = displayNames.length;
   scene.displayNames = displayNames;
   scene.colors = displayNames.map((name, index) => CAR_COLORS[index % CAR_COLORS.length]);
+  scene.accents = scene.colors.map(accentFor);
+  scene.lightColors = scene.colors.map(
+    (color) => mixedColor(color, COLOR_MIX_WHITE, SHADE_LIGHTEN),
+  );
+  scene.darkColors = scene.colors.map(
+    (color) => mixedColor(color, COLOR_MIX_BLACK, SHADE_DARKEN),
+  );
   scene.config = config;
   camera.units = -config.lookBackUnits;
   camera.targetUnits = camera.units;
   camera.isParked = false;
+}
+
+/**
+ * accentFor(color, index) → the second color of car `index`, drawn in `color`: the accent of
+ * its dozen, or the next one when that is its own color; null for a single-tone car.
+ */
+function accentFor(color, index) {
+  const dozen = Math.floor(index / CAR_COLORS.length);
+  let slot = dozen % CAR_ACCENTS.length;
+  if (CAR_ACCENTS[slot] === color) {
+    slot += 1;
+    if (slot === CAR_ACCENTS.length) slot = 1;
+  }
+  return CAR_ACCENTS[slot];
 }
 
 /* ==== CAMERA ==== */
@@ -312,22 +415,29 @@ function fillStrip(leftNear, rightNear, yNear, leftFar, rightFar, yFar, color) {
 }
 
 /**
- * fadedColor(hex, fade) → a '#rrggbb' colour mixed toward the verge by `fade` (0 keeps it, 1 is
- * the verge), as an rgb() string. Opaque fills, never alpha: an alpha fill over the fill below
- * it lets that one show through, and the kerb red bled onto the tarmac (found on the phone,
- * 2026-11-01).
+ * mixedColor(hex, targetHex, share) → a '#rrggbb' colour mixed toward another by `share` (0
+ * keeps it, 1 is the target), as an rgb() string. Opaque fills, never alpha: an alpha fill over
+ * the fill below it lets that one show through, and the kerb red bled onto the tarmac (found on
+ * the phone, 2026-11-01).
  */
-function fadedColor(hex, fade) {
+function mixedColor(hex, targetHex, share) {
   const red = parseInt(hex.slice(1, 3), 16);
   const green = parseInt(hex.slice(3, 5), 16);
   const blue = parseInt(hex.slice(5, 7), 16);
-  const vergeRed = parseInt(COLOR_VERGE.slice(1, 3), 16);
-  const vergeGreen = parseInt(COLOR_VERGE.slice(3, 5), 16);
-  const vergeBlue = parseInt(COLOR_VERGE.slice(5, 7), 16);
-  const mixedRed = Math.round(red + (vergeRed - red) * fade);
-  const mixedGreen = Math.round(green + (vergeGreen - green) * fade);
-  const mixedBlue = Math.round(blue + (vergeBlue - blue) * fade);
+  const targetRed = parseInt(targetHex.slice(1, 3), 16);
+  const targetGreen = parseInt(targetHex.slice(3, 5), 16);
+  const targetBlue = parseInt(targetHex.slice(5, 7), 16);
+  const mixedRed = Math.round(red + (targetRed - red) * share);
+  const mixedGreen = Math.round(green + (targetGreen - green) * share);
+  const mixedBlue = Math.round(blue + (targetBlue - blue) * share);
   return `rgb(${mixedRed}, ${mixedGreen}, ${mixedBlue})`;
+}
+
+/**
+ * fadedColor(hex, fade) → `hex` mixed toward the verge by `fade`, for the road's roll-off.
+ */
+function fadedColor(hex, fade) {
+  return mixedColor(hex, COLOR_VERGE, fade);
 }
 
 /**
@@ -425,36 +535,271 @@ function drawFinishLine() {
 /* ==== CARS ==== */
 
 /**
- * drawCar(x, y, widthPx, color) → a rear view of an open-wheel car from primitives: two tyres,
- * the body, a rear wing on pillars and a helmet, with its bottom centre at (x, y). The only
- * function that knows what a car looks like, so sprites could replace it later.
+ * drawCar(x, y, widthPx, car) → car `car` from behind with its bottom centre at (x, y), drawn
+ * widthPx wide from primitives in its color and accent (CAR_SHAPE has the proportions). Back to
+ * front: tyres and wishbones, the diffuser, the pods, the wing pillars, the roll hoop and the
+ * helmet, the engine cover over them (only the helmet's top shows), the wing last. These are
+ * the only functions that know what a car looks like, so sprites could replace them later.
  */
-function drawCar(x, y, widthPx, color) {
+function drawCar(x, y, widthPx, car) {
+  const heightPx = widthPx * CAR_HEIGHT_RATIO;
+  const isDetailed = widthPx >= CAR_DETAIL_MIN_PX;
+  drawTyres(x, y, widthPx, heightPx);
+  if (isDetailed) drawWishbones(x, y, widthPx, heightPx);
+  drawDiffuser(x, y, widthPx, heightPx, isDetailed);
+  drawPods(x, y, widthPx, heightPx, car, isDetailed);
+  drawPillars(x, y, widthPx, heightPx);
+  if (isDetailed) drawRollHoop(x, y, widthPx, heightPx);
+  drawHelmet(x, y, widthPx, heightPx);
+  drawEngineCover(x, y, widthPx, heightPx, car);
+  drawWing(x, y, widthPx, heightPx, car, isDetailed);
+}
+
+/**
+ * fillRoundedRect(left, top, width, height, radius) → fills a rectangle with rounded corners
+ * (radius capped at half the shorter side), in the current fill style.
+ */
+function fillRoundedRect(left, top, width, height, radius) {
   const { ctx } = view;
-  const height = widthPx * CAR_HEIGHT_RATIO;
-  const tyreWidth = widthPx * 0.24;
-  const tyreHeight = height * 0.55;
-  const bodyWidth = widthPx * 0.46;
-  const bodyHeight = height * 0.5;
-  const wingHeight = height * 0.16;
-  ctx.fillStyle = COLOR_TYRE;
-  ctx.fillRect(x - widthPx / 2, y - tyreHeight, tyreWidth, tyreHeight);
-  ctx.fillRect(x + widthPx / 2 - tyreWidth, y - tyreHeight, tyreWidth, tyreHeight);
-  ctx.fillStyle = color;
-  ctx.fillRect(x - bodyWidth / 2, y - bodyHeight, bodyWidth, bodyHeight);
-  ctx.fillRect(x - widthPx * 0.08, y - height, widthPx * 0.16, height - bodyHeight);
-  ctx.fillRect(x - widthPx * 0.42, y - height, widthPx * 0.84, wingHeight);
-  ctx.fillStyle = COLOR_KERB_WHITE;
-  const helmet = Math.max(1, widthPx * 0.09);
+  const corner = Math.min(radius, width / 2, height / 2);
+  const right = left + width;
+  const bottom = top + height;
   ctx.beginPath();
-  ctx.arc(x, y - bodyHeight - helmet * 0.6, helmet, 0, Math.PI * 2);
+  ctx.moveTo(left + corner, top);
+  ctx.lineTo(right - corner, top);
+  ctx.arcTo(right, top, right, top + corner, corner);
+  ctx.lineTo(right, bottom - corner);
+  ctx.arcTo(right, bottom, right - corner, bottom, corner);
+  ctx.lineTo(left + corner, bottom);
+  ctx.arcTo(left, bottom, left, bottom - corner, corner);
+  ctx.lineTo(left, top + corner);
+  ctx.arcTo(left, top, left + corner, top, corner);
+  ctx.closePath();
   ctx.fill();
+}
+
+/**
+ * drawTyres(x, y, widthPx, heightPx) → the two rear tyres at the car's outer edges: a rounded
+ * tread band over black that squares off where the tyre meets the road.
+ */
+function drawTyres(x, y, widthPx, heightPx) {
+  const { ctx } = view;
+  const tyreWidth = widthPx * CAR_SHAPE.tyreWidth;
+  const tyreHeight = heightPx * CAR_SHAPE.tyreHeight;
+  const treadHeight = tyreHeight * CAR_SHAPE.treadHeight;
+  const corner = tyreWidth * CAR_SHAPE.tyreCorner;
+  for (let side = -1; side <= 1; side += 2) {
+    let left = x - widthPx / 2;
+    if (side > 0) left = x + widthPx / 2 - tyreWidth;
+    ctx.fillStyle = COLOR_TREAD;
+    fillRoundedRect(left, y - tyreHeight, tyreWidth, tyreHeight, corner);
+    ctx.fillStyle = COLOR_TYRE;
+    ctx.fillRect(left, y - tyreHeight + treadHeight, tyreWidth, tyreHeight - treadHeight);
+  }
+}
+
+/**
+ * drawWishbones(x, y, widthPx, heightPx) → the rear suspension: an upper and a lower arm from
+ * the body out to each tyre, rising slightly toward the tyre.
+ */
+function drawWishbones(x, y, widthPx, heightPx) {
+  const { ctx } = view;
+  ctx.strokeStyle = COLOR_CAR_DARK;
+  ctx.lineWidth = Math.max(1, widthPx * CAR_SHAPE.wishboneWidth);
+  ctx.beginPath();
+  for (let side = -1; side <= 1; side += 2) {
+    const inner = x + side * widthPx * CAR_SHAPE.wishboneBodyX;
+    const outer = x + side * (widthPx / 2 - widthPx * CAR_SHAPE.tyreWidth);
+    ctx.moveTo(inner, y - heightPx * CAR_SHAPE.wishboneUpperY);
+    ctx.lineTo(outer, y - heightPx * (CAR_SHAPE.wishboneUpperY + CAR_SHAPE.wishboneUpperRise));
+    ctx.moveTo(inner, y - heightPx * CAR_SHAPE.wishboneLowerY);
+    ctx.lineTo(outer, y - heightPx * (CAR_SHAPE.wishboneLowerY + CAR_SHAPE.wishboneLowerRise));
+  }
+  ctx.stroke();
+}
+
+/**
+ * drawDiffuser(x, y, widthPx, heightPx, isDetailed) → the dark diffuser along the bottom, with
+ * vertical strakes when the car is drawn wide enough.
+ */
+function drawDiffuser(x, y, widthPx, heightPx, isDetailed) {
+  const { ctx } = view;
+  const halfWidth = widthPx * CAR_SHAPE.diffuserHalfWidth;
+  const height = heightPx * CAR_SHAPE.diffuserHeight;
+  ctx.fillStyle = COLOR_CAR_DARK;
+  ctx.fillRect(x - halfWidth, y - height, halfWidth * 2, height);
+  if (!isDetailed) return;
+  const strakeWidth = Math.max(1, widthPx * CAR_SHAPE.strakeWidth);
+  ctx.fillStyle = COLOR_TREAD;
+  for (let i = 0; i < STRAKE_POSITIONS.length; i++) {
+    const strakeX = x + halfWidth * STRAKE_POSITIONS[i] - strakeWidth / 2;
+    ctx.fillRect(strakeX, y - height, strakeWidth, height);
+  }
+}
+
+/**
+ * drawPods(x, y, widthPx, heightPx, car, isDetailed) → the wide low pods across the back: a
+ * band along the rounded top edge in the accent (a lighter shade on a single-tone car), the
+ * car's color below it, squared off at the diffuser, and an exhaust in each when detailed.
+ */
+function drawPods(x, y, widthPx, heightPx, car, isDetailed) {
+  const { ctx } = view;
+  const left = x - widthPx * CAR_SHAPE.podHalfWidth;
+  const podWidth = widthPx * CAR_SHAPE.podHalfWidth * 2;
+  const top = y - heightPx * CAR_SHAPE.podTopY;
+  const podHeight = heightPx * (CAR_SHAPE.podTopY - CAR_SHAPE.podBottomY);
+  const accent = scene.accents[car];
+  let bandHeight = heightPx * CAR_SHAPE.podShadeHeight;
+  if (accent) bandHeight = heightPx * CAR_SHAPE.podBandHeight;
+  ctx.fillStyle = accent || scene.lightColors[car];
+  fillRoundedRect(left, top, podWidth, podHeight, widthPx * CAR_SHAPE.podCorner);
+  ctx.fillStyle = scene.colors[car];
+  ctx.fillRect(left, top + bandHeight, podWidth, podHeight - bandHeight);
+  if (!isDetailed) return;
+  ctx.fillStyle = COLOR_TYRE;
+  ctx.beginPath();
+  for (let side = -1; side <= 1; side += 2) {
+    const exhaustX = x + side * widthPx * CAR_SHAPE.exhaustX;
+    const exhaustY = y - heightPx * CAR_SHAPE.exhaustY;
+    ctx.moveTo(exhaustX + widthPx * CAR_SHAPE.exhaustRadius, exhaustY);
+    ctx.arc(exhaustX, exhaustY, widthPx * CAR_SHAPE.exhaustRadius, 0, Math.PI * 2);
+  }
+  ctx.fill();
+}
+
+/**
+ * drawPillars(x, y, widthPx, heightPx) → the two dark pillars from the engine cover up to the
+ * wing; the cover and the wing are drawn over their ends.
+ */
+function drawPillars(x, y, widthPx, heightPx) {
+  const { ctx } = view;
+  const pillarWidth = widthPx * CAR_SHAPE.pillarWidth;
+  const top = y - heightPx * CAR_SHAPE.pillarTopY;
+  const pillarHeight = heightPx * (CAR_SHAPE.pillarTopY - CAR_SHAPE.pillarBottomY);
+  ctx.fillStyle = COLOR_CAR_DARK;
+  ctx.fillRect(x - widthPx * CAR_SHAPE.pillarInnerX - pillarWidth, top, pillarWidth, pillarHeight);
+  ctx.fillRect(x + widthPx * CAR_SHAPE.pillarInnerX, top, pillarWidth, pillarHeight);
+}
+
+/**
+ * drawRollHoop(x, y, widthPx, heightPx) → the roll hoop's arc behind the helmet; the engine
+ * cover hides its legs.
+ */
+function drawRollHoop(x, y, widthPx, heightPx) {
+  const { ctx } = view;
+  ctx.strokeStyle = COLOR_CAR_DARK;
+  ctx.lineWidth = Math.max(1, widthPx * CAR_SHAPE.hoopWidth);
+  ctx.beginPath();
+  ctx.arc(x, y - heightPx * CAR_SHAPE.hoopY, widthPx * CAR_SHAPE.hoopRadius, Math.PI, Math.PI * 2);
+  ctx.stroke();
+}
+
+/**
+ * drawHelmet(x, y, widthPx, heightPx) → the helmet, drawn whole; the engine cover over it
+ * leaves only the top showing (Rich, 2026-11-02).
+ */
+function drawHelmet(x, y, widthPx, heightPx) {
+  const { ctx } = view;
+  ctx.fillStyle = COLOR_HELMET;
+  ctx.beginPath();
+  ctx.arc(x, y - heightPx * CAR_SHAPE.helmetY, widthPx * CAR_SHAPE.helmetRadius, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+/**
+ * coverHalfWidthAt(widthPx, yShare) → the engine cover's half-width in pixels at `yShare` of
+ * the car's height: it tapers in a straight line from its base to its top.
+ */
+function coverHalfWidthAt(widthPx, yShare) {
+  const climb = (yShare - CAR_SHAPE.coverBaseY) / (CAR_SHAPE.coverTopY - CAR_SHAPE.coverBaseY);
+  const taper = CAR_SHAPE.coverTopHalfWidth - CAR_SHAPE.coverBaseHalfWidth;
+  return widthPx * (CAR_SHAPE.coverBaseHalfWidth + taper * climb);
+}
+
+/**
+ * fillCoverSlice(x, y, widthPx, heightPx, bottomShare, topShare) → the engine cover between
+ * two heights (shares of the car's height), as a trapezoid in the current fill style.
+ */
+function fillCoverSlice(x, y, widthPx, heightPx, bottomShare, topShare) {
+  const { ctx } = view;
+  const bottomHalf = coverHalfWidthAt(widthPx, bottomShare);
+  const topHalf = coverHalfWidthAt(widthPx, topShare);
+  const bottom = y - heightPx * bottomShare;
+  const top = y - heightPx * topShare;
+  ctx.beginPath();
+  ctx.moveTo(x - bottomHalf, bottom);
+  ctx.lineTo(x + bottomHalf, bottom);
+  ctx.lineTo(x + topHalf, top);
+  ctx.lineTo(x - topHalf, top);
+  ctx.closePath();
+  ctx.fill();
+}
+
+/**
+ * drawEngineCover(x, y, widthPx, heightPx, car) → the cover rising out of the pods, in the
+ * car's color with a lighter band along its top and, on a two-tone car, a band in the accent.
+ */
+function drawEngineCover(x, y, widthPx, heightPx, car) {
+  const { ctx } = view;
+  ctx.fillStyle = scene.colors[car];
+  fillCoverSlice(x, y, widthPx, heightPx, CAR_SHAPE.coverBaseY, CAR_SHAPE.coverTopY);
+  ctx.fillStyle = scene.lightColors[car];
+  fillCoverSlice(
+    x,
+    y,
+    widthPx,
+    heightPx,
+    CAR_SHAPE.coverTopY - CAR_SHAPE.coverShadeHeight,
+    CAR_SHAPE.coverTopY,
+  );
+  const accent = scene.accents[car];
+  if (!accent) return;
+  ctx.fillStyle = accent;
+  fillCoverSlice(
+    x,
+    y,
+    widthPx,
+    heightPx,
+    CAR_SHAPE.coverBandY,
+    CAR_SHAPE.coverBandY + CAR_SHAPE.coverBandHeight,
+  );
+}
+
+/**
+ * drawWing(x, y, widthPx, heightPx, car, isDetailed) → the two-element rear wing, low over the
+ * cover: the main plane in the car's color, lit along its top edge and dark underneath; the
+ * flap above it and the endplates in the accent; the rain light on the plane when detailed.
+ */
+function drawWing(x, y, widthPx, heightPx, car, isDetailed) {
+  const { ctx } = view;
+  const halfWidth = widthPx * CAR_SHAPE.wingHalfWidth;
+  const top = y - heightPx * CAR_SHAPE.wingTopY;
+  const thickness = heightPx * CAR_SHAPE.wingThickness;
+  const undersideHeight = thickness * CAR_SHAPE.wingUndersideShare;
+  ctx.fillStyle = scene.colors[car];
+  ctx.fillRect(x - halfWidth, top, halfWidth * 2, thickness);
+  ctx.fillStyle = scene.lightColors[car];
+  ctx.fillRect(x - halfWidth, top, halfWidth * 2, thickness * CAR_SHAPE.wingShadeShare);
+  ctx.fillStyle = scene.darkColors[car];
+  ctx.fillRect(x - halfWidth, top + thickness - undersideHeight, halfWidth * 2, undersideHeight);
+  const flapHalfWidth = widthPx * CAR_SHAPE.flapHalfWidth;
+  const flapThickness = heightPx * CAR_SHAPE.flapThickness;
+  const flapTop = top - heightPx * CAR_SHAPE.flapGapY - flapThickness;
+  ctx.fillStyle = scene.accents[car] || scene.colors[car];
+  ctx.fillRect(x - flapHalfWidth, flapTop, flapHalfWidth * 2, flapThickness);
+  const plateWidth = widthPx * CAR_SHAPE.endplateWidth;
+  const plateTop = y - heightPx * CAR_SHAPE.endplateTopY;
+  const plateHeight = heightPx * (CAR_SHAPE.endplateTopY - CAR_SHAPE.endplateBottomY);
+  ctx.fillRect(x - halfWidth - plateWidth, plateTop, plateWidth, plateHeight);
+  ctx.fillRect(x + halfWidth, plateTop, plateWidth, plateHeight);
+  if (!isDetailed) return;
+  const lightWidth = widthPx * CAR_SHAPE.rainLightWidth;
   ctx.fillStyle = COLOR_LIGHT_ON;
   ctx.fillRect(
-    x - widthPx * 0.04,
-    y - height + wingHeight * 0.25,
-    widthPx * 0.08,
-    wingHeight * 0.5,
+    x - lightWidth / 2,
+    top + thickness * CAR_SHAPE.rainLightInset,
+    lightWidth,
+    thickness * CAR_SHAPE.rainLightHeight,
   );
 }
 
@@ -574,7 +919,7 @@ function drawCars(snapshot) {
     const centre = roadCentreXAt(scale, lateralAt(depth));
     const x = centre + snapshot.lane[car] * roadHalfWidthNearPx() * scale * 0.82;
     const widthPx = carWidthNear * scale;
-    drawCar(x, y, widthPx, scene.colors[car]);
+    drawCar(x, y, widthPx, car);
     const isTop = i < TOP_LABEL_COUNT;
     if ((isTop || widthPx >= labelMin) && labels.count < MAX_CARS) {
       labels.car[labels.count] = car;

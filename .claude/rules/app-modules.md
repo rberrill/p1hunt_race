@@ -57,7 +57,9 @@ paths:
 - `js/app/stage.js`: the canvas. The perspective road from `trackLayout` (drawn `roadViewUnits`
   ahead, fading out at a vanishing point by mixing colours toward the verge, never alpha; kerbs
   beside the tarmac, never under it; bends integrated in fine steps), the camera (follows the
-  leader, parks at the finish), cars drawn from primitives in a palette by index, labels on cars
+  leader, parks at the finish), cars drawn from primitives (`CAR_SHAPE`, Option B of the
+  2026-11-02 mockup) in a color by index with an accent per dozen (`CAR_ACCENTS`; the tower's
+  swatch is the color alone), the shade bands mixed once per race in `setScene`, labels on cars
   drawn wide enough and always on the top three (lifted apart when they would overlap), the finish band, the start lights, `drawStill` for reduced motion.
 - `js/app/winner.js`: the Winner phase. The hero sized to the name, the finish order (phone:
   eight, then Show all), CSV / JSON export named `p1hunt-race-<seed>-<yyyymmdd-hhmm>`, Copy result
