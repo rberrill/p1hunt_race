@@ -5,7 +5,7 @@
 // max, imul and shifts), so the same inputs give the same finish on every device.
 //
 // Sections: RANDOM, TEXT, ENTRANTS, TRACK, RACE, RESULT, SANITIZERS, SELF-TEST.
-import { CONFIG, CONFIG_LIMITS } from './config.js?v=0.1.0-dev.28';
+import { CONFIG, CONFIG_LIMITS } from './config.js?v=0.1.0-dev.29';
 
 /* ==== RANDOM ==== */
 
@@ -524,7 +524,10 @@ function runNominalCar(track, tickLimit, stopDistance, config) {
       turnIndex++;
       isBraking = false;
     }
-    const cornerSpeed = turnIndex < track.turnCount ? track.apexSpeed[turnIndex] : 0;
+    // A corner never asks for more than the straight's pace: at the ceiling it is flat out.
+    const cornerSpeed = turnIndex < track.turnCount
+      ? Math.min(track.apexSpeed[turnIndex], track.topSpeed)
+      : 0;
     planSpeed(plan, track, turnIndex, distance, speed, track.topSpeed, cornerSpeed, isBraking);
     isBraking = plan.isBraking;
     speed = limitSpeed(speed, plan.desired, accelerationStep, brakingStep);
@@ -786,7 +789,12 @@ function moveCars(race) {
     const straightTarget = track.topSpeed * race.factor[i];
     let cornerSpeed = 0;
     if (turnIndex < turnCount) {
-      cornerSpeed = track.apexSpeed[turnIndex] * race.cornerFactor[i * turnCount + turnIndex];
+      // Capped at the car's own straight pace: a wide sweeper is taken flat out (Rich,
+      // 2026-11-02), never faster than the straight before it.
+      cornerSpeed = Math.min(
+        track.apexSpeed[turnIndex] * race.cornerFactor[i * turnCount + turnIndex],
+        straightTarget,
+      );
     }
     planSpeed(speedPlan, track, turnIndex, distance, race.speed[i], straightTarget, cornerSpeed,
       isBraking);
@@ -1244,7 +1252,7 @@ const LAST_CAR_LATEST_SHARE = 1.15;
 // proof that the engine's arithmetic is identical across engines; a tuning change moves it, and
 // that is a user-visible change (a new version), so the constant is updated with the version.
 const REFERENCE_SEED = 'P1HUNT';
-const REFERENCE_FINGERPRINT = 'de5c9157';
+const REFERENCE_FINGERPRINT = 'c831d1c7';
 
 /**
  * testEntrants(count) → [{ name }], `count` distinct names.
@@ -1443,7 +1451,8 @@ function cornerShapeHolds(track) {
 /**
  * cornerProfileHolds(race) → true when the first car's speed through every corner follows the
  * braking rule: from the tick it starts braking to the corner's start its speed never rises;
- * it reaches the corner at its corner speed (within one braking step); between the corner's
+ * it reaches the corner at its corner speed (within one braking step; the corner speed is
+ * capped at the car's straight pace, so a flat-out sweeper asks nothing); between the corner's
  * start and its apex it never exceeds that speed; and on the tick after the apex it is no
  * slower than before, unless it is already braking for the next corner (the throttle opens at
  * the apex). Ticks the race to the end.
@@ -1465,7 +1474,10 @@ function cornerProfileHolds(race) {
       if (race.isBraking[0] === 0 && speed < previousSpeed) return false;
     }
     if (turnIndex >= track.turnCount) break;
-    const cornerSpeed = track.apexSpeed[turnIndex] * race.cornerFactor[turnIndex];
+    const cornerSpeed = Math.min(
+      track.apexSpeed[turnIndex] * race.cornerFactor[turnIndex],
+      track.topSpeed * race.factor[0],
+    );
     const isInCorner = distance >= track.cornerStart[turnIndex];
     if (wasBraking && !isInCorner && speed > previousSpeed) return false;
     if (race.isBraking[0] === 1) wasBraking = true;

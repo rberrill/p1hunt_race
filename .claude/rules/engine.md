@@ -53,7 +53,8 @@ decision log).
 - **Track (Rich):** 2 to 3 turns per 10 s of duration; 1 to 3 long straights among short
   ones (never more than half, Claude's call); each corner a seeded direction and sharpness, 0 a
   sweeper to 1 a hairpin, which sets both the speed held through it (`apexSpeedMax` down to
-  `apexSpeedMin`) and its length (`cornerUnitsMax` down to `cornerUnitsMin`, jittered), so a
+  `apexSpeedMin`, each as a fraction of cruise; at `straightTopSpeed` the sweeper is flat out,
+  and a car's corner speed is capped at its own straight pace) and its length (`cornerUnitsMax` down to `cornerUnitsMin`, jittered), so a
   hairpin is slow and short and a sweeper fast and long (Rich, 2026-11-02; the coupling is
   Claude's call). On a straight a car builds from cruise (1.0, the track unit) toward
   `straightTopSpeed` at its acceleration rate (Rich, 2026-11-01: straights read as straights,

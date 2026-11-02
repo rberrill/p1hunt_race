@@ -6,7 +6,7 @@
 // what a car at cruise speed covers in one second, so a straight of 3 units is a 3 s straight.
 
 export const CONFIG = {
-  appVersion: '0.1.0-dev.28',
+  appVersion: '0.1.0-dev.29',
   storageKey: 'p1hunt.race.v1',
 
   // Race time (not overridable: it is the definition of race time)
@@ -22,7 +22,10 @@ export const CONFIG = {
 
   // Track: turns per 10 s of duration, the straights (a few long ones among short ones), and
   // the corners. Each corner draws a sharpness from 0 (a sweeper) to 1 (a hairpin); its held
-  // speed runs from apexSpeedMax down to apexSpeedMin with it, as a fraction of cruise, and its
+  // speed runs from apexSpeedMax down to apexSpeedMin with it, as a fraction of cruise (1.0;
+  // the straight's top speed is straightTopSpeed, so a ceiling equal to it makes the widest
+  // sweeper a flat-out corner with no lift: Rich, 2026-11-02, "100 % of max"; a car never asks
+  // more of a corner than its own straight pace), and its
   // length from cornerUnitsMax down to cornerUnitsMin, with a seeded jitter on the length, so a
   // hairpin is slow and short and a sweeper fast and long (Rich, 2026-11-02: corners differ in
   // speed by how sharp and long they are; the coupling keeps every corner between about 1.2 and
@@ -34,7 +37,7 @@ export const CONFIG = {
   longStraightRatio: 3,
   straightJitter: 0.25,
   apexSpeedMin: 0.7,
-  apexSpeedMax: 0.75,
+  apexSpeedMax: 1.5,
   cornerUnitsMin: 0.5,
   cornerUnitsMax: 1.3,
   cornerLengthJitter: 0.15,
@@ -102,8 +105,8 @@ export const CONFIG_LIMITS = {
   longStraightsMax: [0, 10],
   longStraightRatio: [1.5, 6],
   straightJitter: [0, 0.5],
-  apexSpeedMin: [0.2, 0.95],
-  apexSpeedMax: [0.2, 0.95],
+  apexSpeedMin: [0.2, 3],
+  apexSpeedMax: [0.2, 3],
   cornerUnitsMin: [0.2, 4],
   cornerUnitsMax: [0.2, 4],
   cornerLengthJitter: [0, 0.5],
