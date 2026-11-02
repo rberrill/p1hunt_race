@@ -6,7 +6,7 @@
 // what a car at cruise speed covers in one second, so a straight of 3 units is a 3 s straight.
 
 export const CONFIG = {
-  appVersion: '0.1.0-dev.22',
+  appVersion: '0.1.0-dev.23',
   storageKey: 'p1hunt.race.v1',
 
   // Race time (not overridable: it is the definition of race time)
@@ -46,14 +46,15 @@ export const CONFIG = {
   // at brakingPerSec on the straight, as late as that rate allows, to reach the corner's speed
   // where the bend starts, holds it to the apex and builds again from the apex out (Rich,
   // 2026-11-02: slow at the very end of the straight, not in the corner; the throttle opens
-  // at the apex; the floor raised from 0.4 the same day, "too slow across the board")
+  // at the apex; the floor raised from 0.4 the same day, "too slow across the board"; braking
+  // 4/s → 2/s the same day, so the braking zone is long enough to read on the stage)
   launchSpread: 0.15,
   checkpointsPerStraight: 3,
   checkpointSpread: 0.12,
   cornerSpread: 0.15,
   straightTopSpeed: 1.5,
   accelerationPerSec: 1,
-  brakingPerSec: 4,
+  brakingPerSec: 2,
 
   // The shell and the stage: how the race is shown, never what it decides. Shell time, in the
   // units named. The countdown, the hold after the last car and the reduced-motion reveal are
