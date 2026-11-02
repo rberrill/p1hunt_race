@@ -53,7 +53,8 @@ paths:
   positioned at the slot of its place from the `--tower-*` heights in the stylesheet and sliding
   to a new slot when its place changes; `fitTower` counts the slots that fit the height, with
   "+ n more" as the last line only then (`towerMaxRows` is a link-only cap); three major slots
-  then small minor ones (full name, gap beside it); refreshed every `towerRefreshMs` with a
+  (a long name shrunk to fit beside its gap, `fitRowName`, never cut while it fits at the minor
+  size) then small minor ones (full name, gap beside it); refreshed every `towerRefreshMs` with a
   green or red flash on a place gained or lost; the gap is distance divided by the trailing
   car's speed; held out of sight, with the names on the cars, until the race clock reaches the
   first refresh interval after lights out), the finish hold, the reduced-motion reveal. Exports `runToEnd` and `frameAt` for the

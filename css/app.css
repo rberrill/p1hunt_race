@@ -380,6 +380,10 @@ input[type="range"] {
   --tower-major-height: 30px;
   --tower-minor-height: 20px;
   --tower-gap: 2px;
+  /* The font sizes are read too: a major row's name is shrunk from the major size toward
+     the minor size to fit beside its gap (Rich, 2026-11-02: never cut). */
+  --tower-major-font: 14px;
+  --tower-minor-font: 10px;
   position: absolute;
   top: 10px;
   bottom: 10px;
@@ -410,7 +414,7 @@ input[type="range"] {
   padding: 0 8px 0 6px;
   border-left: 3px solid transparent;
   background: rgba(22, 22, 24, 0.78);
-  font-size: 14px;
+  font-size: var(--tower-major-font);
   white-space: nowrap;
 }
 /* A row slides to its new slot, growing or shrinking as it crosses the top three; the list is
@@ -418,6 +422,8 @@ input[type="range"] {
 .tower-rows.is-live li {
   transition: top 400ms ease-in-out, height 400ms ease-in-out, font-size 400ms ease-in-out;
 }
+/* The name itself never transitions: the fit measures it at the major size, and a transition
+   would corrupt that probe; a shrunk name snaps as its row crosses the top three. */
 .tower-rows.is-instant li { transition: none; }
 /* Held through the countdown and the first refresh interval (Rich, 2026-11-02); the box
    keeps its size so the fit can measure it. */
@@ -457,7 +463,7 @@ input[type="range"] {
   height: var(--tower-minor-height);
   gap: 5px;
   padding: 0 7px 0 5px;
-  font-size: 10px;
+  font-size: var(--tower-minor-font);
 }
 .tower-rows .is-minor .place { width: 1.5em; }
 .tower-rows .is-minor .swatch { width: 4px; height: 12px; }
@@ -679,16 +685,18 @@ input[type="range"] {
   .tower {
     --tower-major-height: 26px;
     --tower-minor-height: 17px;
+    --tower-major-font: 13px;
+    --tower-minor-font: 9px;
     top: 8px;
     bottom: 8px;
     left: 8px;
     width: 160px;
     max-width: 42%;
   }
-  .tower-rows li { gap: 6px; padding: 0 6px 0 4px; font-size: 13px; }
+  .tower-rows li { gap: 6px; padding: 0 6px 0 4px; }
   .tower-rows .swatch { height: 16px; }
   .tower-rows .gap { font-size: 11px; }
-  .tower-rows .is-minor { gap: 4px; padding: 0 5px 0 3px; font-size: 9px; }
+  .tower-rows .is-minor { gap: 4px; padding: 0 5px 0 3px; }
   .tower-rows .is-minor .swatch { height: 10px; }
   .tower-rows .is-minor .gap { font-size: 9px; }
   .button-bar .btn { flex: 1 1 0; }

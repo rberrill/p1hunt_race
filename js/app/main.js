@@ -1,7 +1,7 @@
 // The entry module: link settings, the saved session, the three phases wired into their loop
 // (Control → Race → Winner → Control), the self-test runner and the test hook. init() runs last.
-import { CONFIG } from '../config.js?v=0.1.0-dev.34';
-import { sanitizeOverrides, selfTest } from '../engine.js?v=0.1.0-dev.34';
+import { CONFIG } from '../config.js?v=0.1.0-dev.35';
+import { sanitizeOverrides, selfTest } from '../engine.js?v=0.1.0-dev.35';
 import {
   app,
   byId,
@@ -11,13 +11,13 @@ import {
   hideCard,
   renderTunedChips,
   files,
-} from './core.js?v=0.1.0-dev.34';
+} from './core.js?v=0.1.0-dev.35';
 import {
   loadStoredSession,
   saveSessionNow,
   clearStoredSession,
   offerResume,
-} from './session.js?v=0.1.0-dev.34';
+} from './session.js?v=0.1.0-dev.35';
 import {
   initControl,
   setEntrantsText,
@@ -29,7 +29,7 @@ import {
   showBackLine,
   importCsvText,
   entrantCount,
-} from './control.js?v=0.1.0-dev.34';
+} from './control.js?v=0.1.0-dev.35';
 import {
   initRace,
   startRace,
@@ -39,8 +39,8 @@ import {
   resetRace,
   runToEnd,
   frameAt,
-} from './race.js?v=0.1.0-dev.34';
-import { initWinner, showWinner, setRerunNote } from './winner.js?v=0.1.0-dev.34';
+} from './race.js?v=0.1.0-dev.35';
+import { initWinner, showWinner, setRerunNote } from './winner.js?v=0.1.0-dev.35';
 
 // Link keys the shell uses itself; they are not settings and are not reported as ignored.
 const SHELL_LINK_KEYS = new Set(['selftest']);

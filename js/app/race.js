@@ -11,7 +11,7 @@ import {
   raceSnapshot,
   trackLayout,
   finishResult,
-} from '../engine.js?v=0.1.0-dev.34';
+} from '../engine.js?v=0.1.0-dev.35';
 import {
   app,
   byId,
@@ -21,7 +21,7 @@ import {
   announce,
   formatRaceTime,
   phoneMedia,
-} from './core.js?v=0.1.0-dev.34';
+} from './core.js?v=0.1.0-dev.35';
 import {
   initStage,
   resizeStage,
@@ -29,7 +29,7 @@ import {
   drawFrame,
   drawStill,
   carColor,
-} from './stage.js?v=0.1.0-dev.34';
+} from './stage.js?v=0.1.0-dev.35';
 
 // The timing tower and the HUD text are rewritten at most this often (frame time).
 const PANEL_INTERVAL_MS = 100;
@@ -48,6 +48,7 @@ const TOWER_MAJOR_ROWS = 3;
 // The tower's rows: place, swatch, name, gap.
 const ROW_PLACE = 0;
 const ROW_SWATCH = 1;
+const ROW_NAME = 2;
 const ROW_GAP = 3;
 
 let onRaceFinished = null;
@@ -65,7 +66,9 @@ let announceDueMs = 0;
 let towerRows = [];
 let rowSlot = null;
 let visibleSlots = 0;
-const towerMetrics = { majorPx: 0, minorPx: 0, gapPx: 0, morePx: 0 };
+const towerMetrics = {
+  majorPx: 0, minorPx: 0, gapPx: 0, morePx: 0, majorFontPx: 0, minorFontPx: 0,
+};
 let revealedPlaces = 0;
 let lastDrawMs = 0;
 let onLeaveRace = null;
@@ -400,6 +403,8 @@ function readTowerMetrics() {
   towerMetrics.majorPx = lengthPx('--tower-major-height');
   towerMetrics.minorPx = lengthPx('--tower-minor-height');
   towerMetrics.gapPx = lengthPx('--tower-gap');
+  towerMetrics.majorFontPx = lengthPx('--tower-major-font');
+  towerMetrics.minorFontPx = lengthPx('--tower-minor-font');
   const more = byId('towerMore');
   const wasHidden = more.hidden;
   more.hidden = false;
@@ -464,6 +469,7 @@ function placeRow(car, place) {
   rowSlot[car] = place;
   row.children[ROW_PLACE].textContent = String(place + 1);
   row.classList.toggle('is-minor', place >= TOWER_MAJOR_ROWS);
+  if (place >= TOWER_MAJOR_ROWS) row.children[ROW_NAME].style.fontSize = '';
   row.style.top = `${slotTopPx(place)}px`;
   row.hidden = place >= visibleSlots;
 }
@@ -476,6 +482,32 @@ function setRowGap(car, gapText, isLeader) {
   const row = towerRows[car];
   if (row.children[ROW_GAP].textContent !== gapText) row.children[ROW_GAP].textContent = gapText;
   row.classList.toggle('is-leader', isLeader);
+}
+
+/**
+ * fitRowName(car) → a major row's name shrunk to fit beside its gap, measured like the Winner
+ * hero, from the major size down to the minor rows' size (Rich, 2026-11-02: a top-three name
+ * is never cut; below that size the ellipsis is the last resort, Claude's call). A name that
+ * fits keeps the row's own size, so it eases with the row's slide; a shrunk one snaps, since
+ * the probe needs the span free of transitions. Measured at the major size, so a row sliding
+ * up fits before it has grown. A minor row's name is left to its row.
+ */
+function fitRowName(car) {
+  const row = towerRows[car];
+  const name = row.children[ROW_NAME];
+  if (row.classList.contains('is-minor')) return;
+  const majorPx = towerMetrics.majorFontPx;
+  name.style.fontSize = `${majorPx}px`;
+  const availablePx = name.clientWidth;
+  const range = document.createRange();
+  range.selectNodeContents(name);
+  const textPx = range.getBoundingClientRect().width;
+  if (textPx <= availablePx) {
+    name.style.fontSize = '';
+    return;
+  }
+  const fittedPx = Math.max(towerMetrics.minorFontPx, (majorPx * availablePx) / textPx);
+  name.style.fontSize = `${Math.floor(fittedPx)}px`;
 }
 
 /**
@@ -527,6 +559,7 @@ function updateTower(snapshot, isFlashed = true) {
       gapText = `+${Math.max(0, gapSec).toFixed(1)}`;
     }
     setRowGap(car, gapText, i === 0 && isStarted);
+    if (i < TOWER_MAJOR_ROWS) fitRowName(car);
   }
 }
 
@@ -551,6 +584,7 @@ function fitTower() {
   for (let car = 0; car < count; car++) {
     placeRow(car, rowSlot[car]);
     if (rowSlot[car] < firstRevealed) towerRows[car].hidden = true;
+    if (rowSlot[car] < TOWER_MAJOR_ROWS) fitRowName(car);
   }
   byId('towerRows').style.height = `${slotBottomPx(visible)}px`;
   const more = byId('towerMore');
@@ -632,6 +666,7 @@ function renderReveal(revealedCount) {
     // would otherwise never un-hide it.
     towerRows[car].hidden = !isShown || i >= visibleSlots;
     setRowGap(car, isShown ? finishedGapText(car, winner) : '', i === 0 && isShown);
+    if (i < TOWER_MAJOR_ROWS) fitRowName(car);
   }
   // The session is over before the reveal starts; the winner's time is in its tower row.
   setText('hudElapsed', formatRaceTime(0, 1));
