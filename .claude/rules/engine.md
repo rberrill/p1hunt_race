@@ -50,8 +50,10 @@ decision log).
   measured in Node. Any change to the race's arithmetic or tunables moves it: update the
   constant in the same change, and treat the change as user-visible (a version bump), since
   old seeds now give other races.
-- **Track (Rich):** 2 to 3 turns per 10 s of duration; 1 to 3 long straights among short
-  ones (never more than half, Claude's call); each corner a seeded direction and sharpness, 0 a
+- **Track (Rich):** `turnsPerTenSecMin` to `turnsPerTenSecMax` turns per 10 s of duration (1.5
+  to 2 since 2026-11-02, Rich: the straights were too short; 2 to 3 before); 1 to 3 long
+  straights among short ones (never more than half, Claude's call), a long one `longStraightRatio`
+  (5) times a short one; each corner a seeded direction and sharpness, 0 a
   sweeper to 1 a hairpin, which sets both the speed held through it (`apexSpeedMax` down to
   `apexSpeedMin`, each as a fraction of cruise; at `straightTopSpeed` the sweeper is flat out,
   and a car's corner speed is capped at its own straight pace) and its length (`cornerUnitsMax` down to `cornerUnitsMin`, jittered), so a
@@ -74,7 +76,14 @@ decision log).
   target, and a corner factor per corner scaling the speed it holds there (drawn apart from the
   checkpoints, because the braking decision needs it before the corner), each a spread around
   1.0 from `CONFIG`. Speed moves toward the planned speed by at most the acceleration or
-  braking rate per tick.
+  braking rate per tick. **Corner exits** (Rich, 2026-11-02): per car and corner a seeded exit
+  quality, -1 to 1 on a bell (`drawExitQuality`: three uniforms averaged, centred, squared with
+  the sign kept, so most exits are near 0 and the tails carry the effect); passing the apex sets
+  the car's `exitFactor` to 1 + `exitSpread` × quality, which scales its acceleration step until
+  the next apex. Braking is never scaled. The nominal car has no exits, so the duration promise
+  is untouched. Measured over eight seeds: the exits alone add about one leader change per race;
+  the long straights lose more, because `checkpointsPerStraight` is per straight, not per unit
+  (open with Rich, 2026-11-02).
 - **Finish (Rich):** every car crosses; the crossing time is the tick plus a linear sub-tick
   fraction; a dead heat goes to the car's seeded tiebreak, then list order. `maxRaceSec` is
   only a guard. Times are kept to the millisecond.

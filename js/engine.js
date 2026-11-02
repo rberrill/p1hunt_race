@@ -5,7 +5,7 @@
 // max, imul and shifts), so the same inputs give the same finish on every device.
 //
 // Sections: RANDOM, TEXT, ENTRANTS, TRACK, RACE, RESULT, SANITIZERS, SELF-TEST.
-import { CONFIG, CONFIG_LIMITS } from './config.js?v=0.1.0-dev.30';
+import { CONFIG, CONFIG_LIMITS } from './config.js?v=0.1.0-dev.31';
 
 /* ==== RANDOM ==== */
 
@@ -588,7 +588,8 @@ const BASE_PACE = 1;
 
 /**
  * drawCarCheckpoints(seedText, carIndex, track, config)
- *   → { distance, factor, cornerFactor, tiebreak } (Float64Arrays and a number).
+ *   → { distance, factor, cornerFactor, exitQuality, tiebreak } (Float64Arrays and a
+ *   number).
  * A car's speed factors along the road, from its own 'car:<index>' stream: a launch factor at
  * the start line and checkpoints along each straight (within the straight, in distance order),
  * each scaling the straight's target; and a corner factor per corner, scaling the speed the car
@@ -606,6 +607,7 @@ function drawCarCheckpoints(seedText, carIndex, track, config) {
   const distance = new Float64Array(count);
   const factor = new Float64Array(count);
   const cornerFactor = new Float64Array(track.turnCount);
+  const exitQuality = new Float64Array(track.turnCount);
   distance[0] = 0;
   factor[0] = pace * (1 + random.nextBetween(-config.launchSpread, config.launchSpread));
   let next = 1;
@@ -627,9 +629,22 @@ function drawCarCheckpoints(seedText, carIndex, track, config) {
     }
     if (i === track.turnCount) break;
     cornerFactor[i] = pace * (1 + random.nextBetween(-config.cornerSpread, config.cornerSpread));
+    exitQuality[i] = drawExitQuality(random);
   }
   const tiebreak = random.nextFloat();
-  return { distance, factor, cornerFactor, tiebreak };
+  return { distance, factor, cornerFactor, exitQuality, tiebreak };
+}
+
+/**
+ * drawExitQuality(random) → the quality of one corner exit, -1 (poor) to 1 (great): three
+ * uniform draws averaged make a bell, most exits near the middle and the tails rare; centred,
+ * then squared with its sign kept, so an average exit changes almost nothing and a great or
+ * poor one carries most of the effect (Rich, 2026-11-02: bell shaped, the ends get most of
+ * it). Sums, products and abs only, so it rounds the same everywhere.
+ */
+function drawExitQuality(random) {
+  const centred = (random.nextFloat() + random.nextFloat() + random.nextFloat()) / 1.5 - 1;
+  return centred * Math.abs(centred);
 }
 
 /**
@@ -694,6 +709,7 @@ export function createRace(options) {
   // One corner factor per car per corner, flat: car i's factor for corner t is at
   // i * turnCount + t.
   const cornerFactor = new Float64Array(carCount * track.turnCount);
+  const exitQuality = new Float64Array(carCount * track.turnCount);
   const tiebreak = new Float64Array(carCount);
   let offset = 0;
   for (let i = 0; i < carCount; i++) {
@@ -703,6 +719,7 @@ export function createRace(options) {
     offset += perCar[i].distance.length;
     checkpointEnd[i] = offset;
     cornerFactor.set(perCar[i].cornerFactor, i * track.turnCount);
+    exitQuality.set(perCar[i].exitQuality, i * track.turnCount);
     tiebreak[i] = perCar[i].tiebreak;
   }
   const order = new Int32Array(carCount);
@@ -730,6 +747,10 @@ export function createRace(options) {
     checkpointEnd,
     checkpointIndex: Int32Array.from(checkpointStart),
     cornerFactor,
+    exitQuality,
+    // The exit of the last corner passed, as a factor on the acceleration rate; 1 before the
+    // first apex.
+    exitFactor: new Float64Array(carCount).fill(1),
     turnIndex: new Int32Array(carCount),
     isBraking: new Uint8Array(carCount),
     speedPlan: { desired: 0, isBraking: false },
@@ -768,6 +789,7 @@ function moveCars(race) {
   const { track, tickSec, config, speedPlan } = race;
   const accelerationStep = config.accelerationPerSec * tickSec;
   const brakingStep = config.brakingPerSec * tickSec;
+  const exitSpread = config.exitSpread;
   const finishUnits = track.finishUnits;
   const turnCount = track.turnCount;
   let crossings = 0;
@@ -782,6 +804,9 @@ function moveCars(race) {
     let turnIndex = race.turnIndex[i];
     let isBraking = race.isBraking[i] === 1;
     while (turnIndex < turnCount && distance >= track.apex[turnIndex]) {
+      // The exit of the corner just passed sets how the car builds on the straight after it
+      // (Rich, 2026-11-02).
+      race.exitFactor[i] = 1 + exitSpread * race.exitQuality[i * turnCount + turnIndex];
       turnIndex++;
       isBraking = false;
     }
@@ -799,7 +824,8 @@ function moveCars(race) {
     planSpeed(speedPlan, track, turnIndex, distance, race.speed[i], straightTarget, cornerSpeed,
       isBraking);
     race.isBraking[i] = speedPlan.isBraking ? 1 : 0;
-    const speed = limitSpeed(race.speed[i], speedPlan.desired, accelerationStep, brakingStep);
+    const speed = limitSpeed(race.speed[i], speedPlan.desired,
+      accelerationStep * race.exitFactor[i], brakingStep);
     race.speed[i] = speed;
     race.previousDistance[i] = distance;
     race.distance[i] = distance + speed * tickSec;
@@ -1252,7 +1278,7 @@ const LAST_CAR_LATEST_SHARE = 1.15;
 // proof that the engine's arithmetic is identical across engines; a tuning change moves it, and
 // that is a user-visible change (a new version), so the constant is updated with the version.
 const REFERENCE_SEED = 'P1HUNT';
-const REFERENCE_FINGERPRINT = '391d2986';
+const REFERENCE_FINGERPRINT = 'a6f0bd25';
 
 /**
  * testEntrants(count) → [{ name }], `count` distinct names.
@@ -1488,6 +1514,81 @@ function cornerProfileHolds(race) {
 }
 
 /**
+ * exitShapeHolds(race) → true when the exit qualities of every car and corner sit on the bell
+ * meant: all within [-1, 1], the mean near 0, most within a quarter of the range, and both
+ * tails reached somewhere in a 100-car field.
+ */
+function exitShapeHolds(race) {
+  const qualities = race.exitQuality;
+  let sum = 0;
+  let nearMiddle = 0;
+  let lowest = 0;
+  let highest = 0;
+  for (let i = 0; i < qualities.length; i++) {
+    const quality = qualities[i];
+    if (quality < -1 || quality > 1) return false;
+    sum += quality;
+    if (Math.abs(quality) < 0.25) nearMiddle++;
+    lowest = Math.min(lowest, quality);
+    highest = Math.max(highest, quality);
+  }
+  const mean = sum / qualities.length;
+  const nearShare = nearMiddle / qualities.length;
+  return Math.abs(mean) < 0.05 && nearShare > 0.7 && nearShare < 0.95
+    && lowest < -0.4 && highest > 0.4;
+}
+
+/**
+ * exitEffectHolds(race) → true when, after each apex, the first car's exit factor equals
+ * 1 + exitSpread × its exit quality for that corner and its speed builds by exactly the
+ * acceleration step times that factor while it is short of its straight pace and not braking.
+ * Ticks the race to the end; at least one such tick must have been checked.
+ */
+function exitEffectHolds(race) {
+  const { track } = race;
+  const accelerationStep = race.config.accelerationPerSec * race.tickSec;
+  let previousSpeed = 0;
+  let checked = 0;
+  while (!race.isFinished) {
+    advanceTick(race);
+    const turnIndex = race.turnIndex[0];
+    const speed = race.speed[0];
+    if (turnIndex > 0 && turnIndex <= track.turnCount) {
+      const expected = 1 + race.config.exitSpread * race.exitQuality[turnIndex - 1];
+      if (race.exitFactor[0] !== expected) return false;
+      const target = track.topSpeed * race.factor[0];
+      const isBuilding = race.isBraking[0] === 0
+        && speed > previousSpeed
+        && speed < target - accelerationStep * 2;
+      if (isBuilding) {
+        const step = speed - previousSpeed;
+        if (Math.abs(step - accelerationStep * race.exitFactor[0]) > 1e-9) return false;
+        checked++;
+      }
+    }
+    previousSpeed = speed;
+  }
+  return checked > 0;
+}
+
+/**
+ * exitTests(check) → nothing. Corner exits (Rich, 2026-11-02): the seeded exit quality is a
+ * centred bell with its tails reached; a car's acceleration from each apex is the base rate
+ * times its exit factor for that corner.
+ */
+function exitTests(check) {
+  const field = raceFor(100, 'exits', 30);
+  check('Exits: the exit qualities are a centred bell within [-1, 1], tails reached',
+    exitShapeHolds(field), `${field.exitQuality.length} draws`);
+  let isEffectOk = true;
+  for (const seedText of ['exits', 'K7MX-4QZD', 'sweep-5']) {
+    if (!exitEffectHolds(raceFor(2, seedText, 30))) isEffectOk = false;
+  }
+  check('Exits: from each apex a car builds at the base rate times its exit factor',
+    isEffectOk, 'three seeds, the first car tick by tick');
+}
+
+/**
  * cornerTests(check) → nothing. The corners (Rich, 2026-11-02): each corner's held speed and
  * length follow its sharpness; a car brakes on the straight to the corner speed, holds it
  * through the corner and never exceeds it there; a sharper corner is slower.
@@ -1541,8 +1642,13 @@ function raceTests(check) {
   const layout = trackLayout(fresh);
   const turnsPerTenSec = layout.turns.length / (30 / 10);
   const longCount = layout.straights.filter(straight => straight.isLong).length;
-  check('Track: 2 to 3 turns per 10 s, 1 to 3 long straights, finish past the last turn',
-    turnsPerTenSec >= 2 && turnsPerTenSec <= 3 && longCount >= 1 && longCount <= 3
+  // The turn count is rounded, so the rate may sit half a turn over 30 s outside the range.
+  const roundingSlack = 0.5 / 3;
+  check('Track: turns per 10 s and long straights within CONFIG, finish past the last turn',
+    turnsPerTenSec >= CONFIG.turnsPerTenSecMin - roundingSlack
+      && turnsPerTenSec <= CONFIG.turnsPerTenSecMax + roundingSlack
+      && longCount >= Math.min(CONFIG.longStraightsMin, Math.floor(layout.straights.length / 2))
+      && longCount <= CONFIG.longStraightsMax
       && layout.finishUnits > layout.turns[layout.turns.length - 1].cornerEnd,
     `${layout.turns.length} turns, ${longCount} long straights`);
   const refused = [];
@@ -1713,8 +1819,8 @@ export function selfTest() {
   const check = (name, pass, detail) => {
     results.push({ name, pass: !!pass, detail: detail === undefined ? '' : String(detail) });
   };
-  const groups = [randomTests, determinismTests, durationTests, cornerTests, raceTests,
-    entrantTests, sanitizerTests];
+  const groups = [randomTests, determinismTests, durationTests, cornerTests, exitTests,
+    raceTests, entrantTests, sanitizerTests];
   for (const group of groups) {
     try {
       group(check);

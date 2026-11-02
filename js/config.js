@@ -6,7 +6,7 @@
 // what a car at cruise speed covers in one second, so a straight of 3 units is a 3 s straight.
 
 export const CONFIG = {
-  appVersion: '0.1.0-dev.30',
+  appVersion: '0.1.0-dev.31',
   storageKey: 'p1hunt.race.v1',
 
   // Race time (not overridable: it is the definition of race time)
@@ -20,7 +20,9 @@ export const CONFIG = {
   maxNameLength: 40,
   maxSeedLength: 40,
 
-  // Track: turns per 10 s of duration, the straights (a few long ones among short ones), and
+  // Track: turns per 10 s of duration (1.5 to 2 since 2026-11-02, Rich: the straights were
+  // too short; 2 to 3 before), the straights (a few long ones among short ones, the long
+  // ones five times the short), and
   // the corners. Each corner draws a sharpness from 0 (a sweeper) to 1 (a hairpin); its held
   // speed runs from apexSpeedMax down to apexSpeedMin with it, as a fraction of cruise (1.0;
   // the straight's top speed is straightTopSpeed, so a ceiling equal to it makes the widest
@@ -30,16 +32,16 @@ export const CONFIG = {
   // hairpin is slow and short and a sweeper fast and long (Rich, 2026-11-02: corners differ in
   // speed by how sharp and long they are; the coupling keeps every corner between about 1.2 and
   // 1.8 s and is Claude's call). The ranges are starting values, to tune on the stage
-  turnsPerTenSecMin: 2,
-  turnsPerTenSecMax: 3,
+  turnsPerTenSecMin: 1.5,
+  turnsPerTenSecMax: 2,
   longStraightsMin: 1,
   longStraightsMax: 3,
-  longStraightRatio: 3,
+  longStraightRatio: 5,
   straightJitter: 0.25,
   apexSpeedMin: 0.5,
   apexSpeedMax: 1.5,
   cornerUnitsMin: 0.5,
-  cornerUnitsMax: 1.3,
+  cornerUnitsMax: 2,
   cornerLengthJitter: 0.15,
 
   // Cars: every car has the same base pace (not a tunable; Rich's decision). A launch factor,
@@ -58,6 +60,11 @@ export const CONFIG = {
   straightTopSpeed: 1.5,
   accelerationPerSec: 1,
   brakingPerSec: 2,
+  // Corner exits (Rich, 2026-11-02): per car per corner a seeded exit quality on a bell,
+  // -1 to 1 with most near 0, scales the car's acceleration from the apex by
+  // 1 + exitSpread * quality until it is back at its straight pace; a flat-out sweeper has
+  // no exit, a slow corner a long one. Meant to keep the order moving, at the front too
+  exitSpread: 0.6,
 
   // The shell and the stage: how the race is shown, never what it decides. Shell time, in the
   // units named. The countdown, the hold after the last car and the reduced-motion reveal are
@@ -117,6 +124,7 @@ export const CONFIG_LIMITS = {
   straightTopSpeed: [1, 3],
   accelerationPerSec: [0.2, 5],
   brakingPerSec: [0.2, 10],
+  exitSpread: [0, 0.9],
   startCountdownSec: [0, 5],
   finishHoldMs: [0, 5000],
   revealSec: [1, 10],
