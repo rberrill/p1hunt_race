@@ -205,7 +205,7 @@ if (!scripts.length) {
     + 'Uint32Array clearInterval clearTimeout console document isFinite localStorage location '
     + 'matchMedia navigator parseFloat parseInt performance requestAnimationFrame '
     + 'cancelAnimationFrame setInterval setTimeout undefined window globalThis Boolean crypto '
-    + 'ResizeObserver'
+    + 'ResizeObserver getComputedStyle'
   ).split(' '));
   const badImports = [];
   const unknown = [];

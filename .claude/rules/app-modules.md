@@ -48,10 +48,13 @@ paths:
 - `js/app/race.js`: the Race phase. The race clock (playing time only; `clockToTicks` owes the
   engine its ticks), the frame loop, the countdown, Pause / Play / Reset, the tap-to-pause
   overlay (the bar's Pause or a tap on the stage pauses and shows Play, Reset race, Start over; `leaveRace` drops the
-  race and `main.js` returns to Control with the seed kept), the hidden-tab pause, the HUD and the timing tower over the stage (`fitTower` trims it to what
-  fits the height, with "+ n more" as the last line only then (`towerMaxRows` is a link-only cap); three major rows then small minor ones (full name, gap beside it); refreshed
-  every `towerRefreshMs` with a green or red flash on a place gained or lost; the gap is distance
-  divided by the trailing car's speed), the finish hold, the reduced-motion reveal. Exports `runToEnd` and `frameAt` for the
+  race and `main.js` returns to Control with the seed kept), the hidden-tab pause, the HUD and the timing tower over the stage (one row per car, absolutely
+  positioned at the slot of its place from the `--tower-*` heights in the stylesheet and sliding
+  to a new slot when its place changes; `fitTower` counts the slots that fit the height, with
+  "+ n more" as the last line only then (`towerMaxRows` is a link-only cap); three major slots
+  then small minor ones (full name, gap beside it); refreshed every `towerRefreshMs` with a
+  green or red flash on a place gained or lost; the gap is distance divided by the trailing
+  car's speed), the finish hold, the reduced-motion reveal. Exports `runToEnd` and `frameAt` for the
   test hook. `startRace` resets the play state first: a race left mid-run (the test hook can do
   it) would otherwise leave `isPlaying` set and the new race would never get a frame.
 - `js/app/stage.js`: the canvas. The perspective road from `trackLayout` (drawn `roadViewUnits`
@@ -60,7 +63,8 @@ paths:
   leader, parks at the finish), cars drawn from primitives (`CAR_SHAPE`, Option B of the
   2026-11-02 mockup) in a color by index with an accent per dozen (`CAR_ACCENTS`; the tower's
   swatch is the color alone), the shade bands mixed once per race in `setScene`, labels on cars
-  drawn wide enough and always on the top three (lifted apart when they would overlap), the finish band, the start lights, `drawStill` for reduced motion.
+  drawn directly over the car, never lifted, wide enough and always on the top three, the rest where the
+  label is free, the finish band, the start lights, `drawStill` for reduced motion.
 - `js/app/winner.js`: the Winner phase. The hero sized to the name, the finish order (phone:
   eight, then Show all), CSV / JSON export named `p1hunt-race-<seed>-<yyyymmdd-hhmm>`, Copy result
   only where the clipboard exists, Re-run and Start over.

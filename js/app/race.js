@@ -11,7 +11,7 @@ import {
   raceSnapshot,
   trackLayout,
   finishResult,
-} from '../engine.js?v=0.1.0-dev.23';
+} from '../engine.js?v=0.1.0-dev.24';
 import {
   app,
   byId,
@@ -21,7 +21,7 @@ import {
   announce,
   formatRaceTime,
   phoneMedia,
-} from './core.js?v=0.1.0-dev.23';
+} from './core.js?v=0.1.0-dev.24';
 import {
   initStage,
   resizeStage,
@@ -30,7 +30,7 @@ import {
   drawStill,
   carColor,
   lightsBandPx,
-} from './stage.js?v=0.1.0-dev.23';
+} from './stage.js?v=0.1.0-dev.24';
 
 // The timing tower and the HUD text are rewritten at most this often (frame time).
 const PANEL_INTERVAL_MS = 100;
@@ -47,8 +47,8 @@ const GAP_SPEED_FLOOR = 0.5;
 // 2026-11-01: "only the top 3 need to be that big").
 const TOWER_MAJOR_ROWS = 3;
 // The tower's rows: place, swatch, name, gap.
+const ROW_PLACE = 0;
 const ROW_SWATCH = 1;
-const ROW_NAME = 2;
 const ROW_GAP = 3;
 
 let onRaceFinished = null;
@@ -56,9 +56,13 @@ let frameHandle = 0;
 let panelDueMs = 0;
 let towerDueMs = 0;
 let announceDueMs = 0;
+// The tower is one row per car (indexed by car), each sitting at the slot of its place and
+// sliding to a new slot when its place changes (Rich, 2026-11-02); the slots are arithmetic
+// from the row heights and gap the stylesheet declares.
 let towerRows = [];
-let lastOrder = null;
-let lastPlaceOfCar = null;
+let rowSlot = null;
+let visibleSlots = 0;
+const towerMetrics = { majorPx: 0, minorPx: 0, gapPx: 0, morePx: 0 };
 let revealedPlaces = 0;
 let lastDrawMs = 0;
 let onLeaveRace = null;
@@ -373,36 +377,90 @@ function onFinishReached(clockMs) {
 }
 
 /**
- * buildTower() → one row per place, reused for the whole race: place, a swatch in the car's
- * color, the name and the gap to the leader. The first TOWER_MAJOR_ROWS are full width, the rest
- * minor.
+ * readTowerMetrics() → the row heights and the gap from the tower's custom properties (the
+ * phone block sets its own), and the "+ n more" line's height, so a slot's top is arithmetic
+ * and never a measurement of a row that may be mid-slide.
  */
-function buildTower() {
-  towerRows = [];
-  for (let i = 0; i < app.race.carCount; i++) {
-    towerRows.push(makeEl('li', i < TOWER_MAJOR_ROWS ? null : { class: 'is-minor' },
-      makeEl('span', { class: 'place' }, String(i + 1)),
-      makeEl('span', { class: 'swatch' }, ''),
-      makeEl('span', { class: 'name' }, ''),
-      makeEl('span', { class: 'gap' }, '')));
-  }
-  byId('towerRows').replaceChildren(...towerRows);
-  lastOrder = new Int32Array(app.race.carCount).fill(-1);
-  lastPlaceOfCar = new Int32Array(app.race.carCount).fill(-1);
-  fitTower();
+function readTowerMetrics() {
+  const style = getComputedStyle(byId('tower'));
+  const lengthPx = name => parseFloat(style.getPropertyValue(name)) || 0;
+  towerMetrics.majorPx = lengthPx('--tower-major-height');
+  towerMetrics.minorPx = lengthPx('--tower-minor-height');
+  towerMetrics.gapPx = lengthPx('--tower-gap');
+  const more = byId('towerMore');
+  const wasHidden = more.hidden;
+  more.hidden = false;
+  towerMetrics.morePx = more.getBoundingClientRect().height;
+  more.hidden = wasHidden;
 }
 
 /**
- * setTowerRow(i, car, gapText, isLeader) → row i shows `car` (name and swatch rewritten only
- * when the car in that place changed) with the gap text; the leader row carries the accent.
+ * slotTopPx(place) → the top of the slot for `place` (0-based) from the top of the list: the
+ * major slots first, then the minor ones, each followed by the gap.
  */
-function setTowerRow(i, car, gapText, isLeader) {
-  const row = towerRows[i];
-  if (lastOrder[i] !== car) {
-    lastOrder[i] = car;
-    row.children[ROW_NAME].textContent = car < 0 ? '—' : app.race.displayNames[car];
-    row.children[ROW_SWATCH].style.backgroundColor = car < 0 ? 'transparent' : carColor(car);
+function slotTopPx(place) {
+  const majors = Math.min(place, TOWER_MAJOR_ROWS);
+  return majors * (towerMetrics.majorPx + towerMetrics.gapPx)
+    + (place - majors) * (towerMetrics.minorPx + towerMetrics.gapPx);
+}
+
+/**
+ * slotBottomPx(count) → the bottom of the last of `count` slots.
+ */
+function slotBottomPx(count) {
+  const last = count - 1;
+  const heightPx = last < TOWER_MAJOR_ROWS ? towerMetrics.majorPx : towerMetrics.minorPx;
+  return slotTopPx(last) + heightPx;
+}
+
+/**
+ * buildTower() → one row per car, kept for the whole race: its place, a swatch in its color,
+ * its name and the gap to the leader. Every row starts at the slot of its list index (the
+ * order at tick 0), laid out before the slides are switched on (`is-live`), so the first
+ * refresh never animates from the top of the list.
+ */
+function buildTower() {
+  towerRows = [];
+  for (let car = 0; car < app.race.carCount; car++) {
+    const row = makeEl('li', null,
+      makeEl('span', { class: 'place' }, ''),
+      makeEl('span', { class: 'swatch' }, ''),
+      makeEl('span', { class: 'name' }, app.race.displayNames[car]),
+      makeEl('span', { class: 'gap' }, ''));
+    row.children[ROW_SWATCH].style.backgroundColor = carColor(car);
+    towerRows.push(row);
   }
+  const list = byId('towerRows');
+  list.classList.remove('is-live');
+  list.classList.toggle('is-instant', app.isReducedMotion);
+  list.replaceChildren(...towerRows);
+  rowSlot = new Int32Array(app.race.carCount).fill(-1);
+  for (let car = 0; car < app.race.carCount; car++) rowSlot[car] = car;
+  fitTower();
+  void list.offsetHeight;
+  list.classList.add('is-live');
+}
+
+/**
+ * placeRow(car, place) → the car's row sits at the slot of `place`: its number, its size
+ * (major or minor) and its top, which the stylesheet slides while the list is live; hidden
+ * when the slot is past what fits.
+ */
+function placeRow(car, place) {
+  const row = towerRows[car];
+  rowSlot[car] = place;
+  row.children[ROW_PLACE].textContent = String(place + 1);
+  row.classList.toggle('is-minor', place >= TOWER_MAJOR_ROWS);
+  row.style.top = `${slotTopPx(place)}px`;
+  row.hidden = place >= visibleSlots;
+}
+
+/**
+ * setRowGap(car, gapText, isLeader) → the row's gap text (rewritten only when it changed) and
+ * the leader accent.
+ */
+function setRowGap(car, gapText, isLeader) {
+  const row = towerRows[car];
   if (row.children[ROW_GAP].textContent !== gapText) row.children[ROW_GAP].textContent = gapText;
   row.classList.toggle('is-leader', isLeader);
 }
@@ -432,8 +490,8 @@ function finishedGapText(car, winner) {
  * updateTower(snapshot) → every row follows the live order, at the tower's refresh interval.
  * The gap is blank before lights out and on the leader's row; a running car shows its distance
  * to the leader divided by its own speed; a crossed car its exact gap to the winner (the
- * winner, its time). A car that moved up since the last refresh flashes its row green, one
- * that dropped flashes red.
+ * winner, its time). A car whose place changed since the last refresh slides to its new slot
+ * (Rich, 2026-11-02) and flashes its row green for a place gained, red for one lost.
  */
 function updateTower(snapshot) {
   const { order, leader } = snapshot;
@@ -441,11 +499,11 @@ function updateTower(snapshot) {
   const winner = app.race.finishOrder[0];
   for (let i = 0; i < towerRows.length; i++) {
     const car = order[i];
-    const lastPlace = lastPlaceOfCar[car];
-    if (isStarted && lastPlace >= 0 && lastPlace !== i) {
-      flashRow(towerRows[i], i < lastPlace ? 'is-up' : 'is-down');
+    const lastPlace = rowSlot[car];
+    if (lastPlace !== i) {
+      placeRow(car, i);
+      if (isStarted) flashRow(towerRows[car], i < lastPlace ? 'is-up' : 'is-down');
     }
-    lastPlaceOfCar[car] = i;
     let gapText = '';
     if (isStarted && app.race.place[car] > 0) {
       gapText = finishedGapText(car, winner);
@@ -454,30 +512,36 @@ function updateTower(snapshot) {
       const gapSec = (snapshot.distance[leader] - snapshot.distance[car]) / speed;
       gapText = `+${Math.max(0, gapSec).toFixed(1)}`;
     }
-    setTowerRow(i, car, gapText, i === 0 && isStarted);
+    setRowGap(car, gapText, i === 0 && isStarted);
   }
 }
 
 /**
- * fitTower() → shows as many places as fit the tower's height (towerMaxRows at most), hiding
- * from the end until nothing overflows, then "+ n more".
+ * fitTower() → shows as many slots as fit the tower's height (towerMaxRows at most), dropping
+ * from the end until the slots and the "+ n more" line fit, then places every row again (the
+ * metrics change with the phone block), sizes the list to the visible slots and shows the
+ * "+ n more" line when places are left out. During the reduced-motion reveal the rows not yet
+ * revealed stay hidden.
  */
 function fitTower() {
   if (!towerRows.length) return;
-  const tower = byId('tower');
-  const more = byId('towerMore');
-  let visible = Math.min(towerRows.length, app.config.towerMaxRows);
-  for (let i = 0; i < towerRows.length; i++) towerRows[i].hidden = i >= visible;
-  const showMore = () => {
-    more.hidden = visible >= towerRows.length;
-    more.textContent = `+ ${towerRows.length - visible} more`;
-  };
-  showMore();
-  while (visible > 1 && tower.scrollHeight > tower.clientHeight + 1) {
-    visible--;
-    towerRows[visible].hidden = true;
-    showMore();
+  readTowerMetrics();
+  const count = towerRows.length;
+  const heightPx = byId('tower').clientHeight;
+  const neededPx = slots => slotBottomPx(slots)
+    + (slots < count ? towerMetrics.gapPx + towerMetrics.morePx : 0);
+  let visible = Math.min(count, app.config.towerMaxRows);
+  while (visible > 1 && neededPx(visible) > heightPx + 1) visible--;
+  visibleSlots = visible;
+  const firstRevealed = app.isReducedMotion ? count - revealedPlaces : 0;
+  for (let car = 0; car < count; car++) {
+    placeRow(car, rowSlot[car]);
+    if (rowSlot[car] < firstRevealed) towerRows[car].hidden = true;
   }
+  byId('towerRows').style.height = `${slotBottomPx(visible)}px`;
+  const more = byId('towerMore');
+  more.hidden = visible >= count;
+  more.textContent = `+ ${count - visible} more`;
 }
 
 /**
@@ -539,7 +603,8 @@ function advanceReveal(clockMs, frameTimeMs) {
 }
 
 /**
- * renderReveal(revealedCount) → the last `revealedCount` places shown, the rest as dashes.
+ * renderReveal(revealedCount) → the last `revealedCount` places shown at their finish slots,
+ * the slots above them left empty until their turn.
  */
 function renderReveal(revealedCount) {
   const total = app.race.carCount;
@@ -548,8 +613,11 @@ function renderReveal(revealedCount) {
   for (let i = 0; i < towerRows.length; i++) {
     const car = app.race.finishOrder[i];
     const isShown = i >= firstShown;
-    const gapText = isShown ? finishedGapText(car, winner) : '';
-    setTowerRow(i, isShown ? car : -1, gapText, i === 0 && isShown);
+    if (rowSlot[car] !== i) placeRow(car, i);
+    // Set outright: a row already in its finish slot is never re-placed, so its turn to show
+    // would otherwise never un-hide it.
+    towerRows[car].hidden = !isShown || i >= visibleSlots;
+    setRowGap(car, isShown ? finishedGapText(car, winner) : '', i === 0 && isShown);
   }
   const isWinnerShown = firstShown === 0;
   setText('hudElapsed', isWinnerShown
@@ -573,10 +641,15 @@ export function runToEnd() {
 
 /**
  * frameAt(raceClockMs) → test hook: runs one frame as if the race clock read this value, with
- * no animation frame involved, and returns the snapshot's tick.
+ * no animation frame involved (under reduced motion, the reveal step for that clock), and
+ * returns the race's tick.
  */
 export function frameAt(clockMs) {
   if (!app.race) return 0;
+  if (app.isReducedMotion) {
+    advanceReveal(clockMs, performance.now());
+    return app.race.tick;
+  }
   const owed = clockToTicks(app.race, clockMs);
   for (let i = 0; i < owed.ticksDue; i++) advanceTick(app.race);
   drawCurrentFrame(performance.now(), owed.tickFraction, clockMs);

@@ -141,11 +141,10 @@ const LABEL_FONT_MIN_PX = 10;
 const LABEL_FONT_MAX_PX = 16;
 const LABEL_PADDING_PX = 3;
 // The top three of the live order are always labelled (Rich, 2026-11-01), at this font at
-// least; one that would cover another top-three label is lifted by its own height, this many
-// times at most, so the top three never hide each other.
+// least. A label sits directly over its car and is never lifted into a stack (Rich,
+// 2026-11-02; the first cut lifted a top-three label that would cover another).
 const TOP_LABEL_COUNT = 3;
 const LABEL_FONT_TOP_MIN_PX = 12;
-const LABEL_LIFT_TRIES = 3;
 // The finish band: two rows of checks, this tall at the bottom edge.
 const FINISH_BAND_FRACTION = 0.06;
 const FINISH_CHECKS = 12;
@@ -820,16 +819,16 @@ function labelFontPx(widthPx, isTop) {
 }
 
 /**
- * drawLabel(x, y, widthPx, text, fontPx, liftPx) → a name on a dark pill above the car at
- * (x, y) drawn widthPx wide, liftPx higher than its resting place.
+ * drawLabel(x, y, widthPx, text, fontPx) → a name on a dark pill directly above the car at
+ * (x, y) drawn widthPx wide.
  */
-function drawLabel(x, y, widthPx, text, fontPx, liftPx) {
+function drawLabel(x, y, widthPx, text, fontPx) {
   const { ctx } = view;
   ctx.font = `600 ${fontPx}px system-ui, sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'bottom';
   const textWidth = ctx.measureText(text).width;
-  const top = y - widthPx * CAR_HEIGHT_RATIO - fontPx - LABEL_PADDING_PX * 2 - liftPx;
+  const top = y - widthPx * CAR_HEIGHT_RATIO - fontPx - LABEL_PADDING_PX * 2;
   ctx.fillStyle = COLOR_LABEL_BG;
   ctx.fillRect(
     x - textWidth / 2 - LABEL_PADDING_PX,
@@ -842,15 +841,17 @@ function drawLabel(x, y, widthPx, text, fontPx, liftPx) {
 }
 
 /**
- * drawLabels() → places this frame's label candidates: the top three of the live order first
- * (always drawn; one that would cover another top-three label is lifted above it), then the
- * rest nearest car first, dropping any that would overlap a label already placed, so a bunched
- * pack never reads as a pile of text. The accepted boxes are kept in the same arrays,
+ * drawLabels() → places this frame's label candidates, each directly over its car and never
+ * lifted into a stack (Rich, 2026-11-02): the top three of the live order first, always drawn,
+ * walked from third to first so that where two of them overlap the car ahead is painted last
+ * and stays whole; then the rest nearest car first, dropping any that would overlap a label
+ * already placed, so a bunched pack never reads as a pile of text. The candidates arrive far to
+ * near, which for the top three is race order. The accepted boxes are kept in the same arrays,
  * compacted from the front.
  */
 function drawLabels() {
   let accepted = 0;
-  for (let i = 0; i < labels.count; i++) {
+  for (let i = labels.count - 1; i >= 0; i--) {
     if (labels.isTop[i]) accepted = placeLabel(i, accepted, true);
   }
   for (let i = labels.count - 1; i >= 0; i--) {
@@ -860,10 +861,9 @@ function drawLabels() {
 }
 
 /**
- * placeLabel(i, accepted, isForced) → the accepted count after candidate i. Measures its box;
- * a forced label is lifted by its own height until it is free (LABEL_LIFT_TRIES at most) and
- * always drawn, an ordinary one is dropped when it overlaps. An accepted box is recorded at
- * index `accepted`.
+ * placeLabel(i, accepted, isForced) → the accepted count after candidate i. Measures its box
+ * at rest over the car; a forced label is always drawn, an ordinary one is dropped when it
+ * overlaps a box already accepted. An accepted box is recorded at index `accepted`.
  */
 function placeLabel(i, accepted, isForced) {
   const { ctx } = view;
@@ -874,17 +874,9 @@ function placeLabel(i, accepted, isForced) {
   const heightPx = fontPx + LABEL_PADDING_PX * 2;
   const left = labels.x[i] - halfWidth;
   const right = labels.x[i] + halfWidth;
-  let bottom = labels.y[i] - labels.widthPx[i] * CAR_HEIGHT_RATIO;
-  let liftPx = 0;
-  let tries = 0;
-  while (isForced && tries < LABEL_LIFT_TRIES) {
-    if (isBoxFree(left, right, bottom - heightPx, bottom, accepted)) break;
-    bottom -= heightPx + 1;
-    liftPx += heightPx + 1;
-    tries++;
-  }
+  const bottom = labels.y[i] - labels.widthPx[i] * CAR_HEIGHT_RATIO;
   if (!isForced && !isBoxFree(left, right, bottom - heightPx, bottom, accepted)) return accepted;
-  drawLabel(labels.x[i], labels.y[i], labels.widthPx[i], text, fontPx, liftPx);
+  drawLabel(labels.x[i], labels.y[i], labels.widthPx[i], text, fontPx);
   labels.left[accepted] = left;
   labels.right[accepted] = right;
   labels.top[accepted] = bottom - heightPx;
