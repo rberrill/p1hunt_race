@@ -5,7 +5,7 @@
 // max, imul and shifts), so the same inputs give the same finish on every device.
 //
 // Sections: RANDOM, TEXT, ENTRANTS, TRACK, RACE, RESULT, SANITIZERS, SELF-TEST.
-import { CONFIG, CONFIG_LIMITS } from './config.js?v=0.1.0-dev.20';
+import { CONFIG, CONFIG_LIMITS } from './config.js?v=0.1.0-dev.21';
 
 /* ==== RANDOM ==== */
 
@@ -351,11 +351,15 @@ function orderedRange(low, high) {
 }
 
 /**
- * drawTrackShape(seedText, durationSec, config) → { straightUnits, isLong, direction, apexSpeed }.
+ * drawTrackShape(seedText, durationSec, config) → { straightUnits, isLong, direction,
+ *   sharpness, apexSpeed, cornerUnits }.
  * The seeded shape before scaling: the turn count (2 to 3 per 10 s of duration, Rich's call),
  * which straights are long (1 to 3 of them, Rich's call; never more than half, Claude's call),
- * each straight's length with its jitter, and each turn's direction and apex speed. All from
- * the 'track' stream, in a fixed order, so the shape depends on the seed and duration only.
+ * each straight's length with its jitter, and each corner's direction, sharpness (0 a sweeper,
+ * 1 a hairpin), the speed held through it and its length, the last two running linearly from
+ * the gentle end of their ranges to the sharp end with the sharpness, the length with its own
+ * jitter (Rich, 2026-11-02: corners differ by how sharp and long they are). All from the
+ * 'track' stream, in a fixed order, so the shape depends on the seed and duration only.
  */
 function drawTrackShape(seedText, durationSec, config) {
   const random = createRandom(seedText, 'track');
@@ -380,106 +384,147 @@ function drawTrackShape(seedText, durationSec, config) {
     straightUnits[i] = (isLong[i] ? config.longStraightRatio : 1) * jitter;
   }
   const direction = new Int32Array(turnCount);
+  const sharpness = new Float64Array(turnCount);
   const apexSpeed = new Float64Array(turnCount);
+  const cornerUnits = new Float64Array(turnCount);
   const [apexMin, apexMax] = orderedRange(config.apexSpeedMin, config.apexSpeedMax);
+  const [cornerMin, cornerMax] = orderedRange(config.cornerUnitsMin, config.cornerUnitsMax);
   for (let i = 0; i < turnCount; i++) {
     direction[i] = random.nextInt(2) === 0 ? -1 : 1;
-    apexSpeed[i] = random.nextBetween(apexMin, apexMax);
+    sharpness[i] = random.nextFloat();
+    const lengthJitter = random.nextBetween(-config.cornerLengthJitter, config.cornerLengthJitter);
+    apexSpeed[i] = apexMax - (apexMax - apexMin) * sharpness[i];
+    cornerUnits[i] = (cornerMax - (cornerMax - cornerMin) * sharpness[i]) * (1 + lengthJitter);
   }
-  return { straightUnits, isLong, direction, apexSpeed };
+  return { straightUnits, isLong, direction, sharpness, apexSpeed, cornerUnits };
 }
 
 /**
  * layoutTrack(shape, scale, config) → track positions.
- * Lays the straights (scaled by `scale`) and the turn zones end to end along the road:
- * straightStart/End, then each turn's brakeStart, apex and exitEnd, in track units.
+ * Lays the straights (scaled by `scale`) and the corners end to end along the road:
+ * straightStart/End, then each corner's cornerStart, apex (its midpoint, where the bend is
+ * tightest) and cornerEnd, in track units. The corners keep their drawn length; only the
+ * straights scale.
  */
 function layoutTrack(shape, scale, config) {
   const turnCount = shape.direction.length;
   const straightStart = new Float64Array(turnCount + 1);
   const straightEnd = new Float64Array(turnCount + 1);
-  const brakeStart = new Float64Array(turnCount);
+  const cornerStart = new Float64Array(turnCount);
   const apex = new Float64Array(turnCount);
-  const exitEnd = new Float64Array(turnCount);
+  const cornerEnd = new Float64Array(turnCount);
   let position = 0;
   for (let i = 0; i <= turnCount; i++) {
     straightStart[i] = position;
     position += shape.straightUnits[i] * scale;
     straightEnd[i] = position;
     if (i === turnCount) break;
-    brakeStart[i] = position;
-    apex[i] = position + config.brakeZoneUnits;
-    exitEnd[i] = apex[i] + config.exitZoneUnits;
-    position = exitEnd[i];
+    cornerStart[i] = position;
+    apex[i] = position + shape.cornerUnits[i] / 2;
+    cornerEnd[i] = position + shape.cornerUnits[i];
+    position = cornerEnd[i];
   }
   return {
     turnCount,
     straightStart,
     straightEnd,
-    brakeStart,
+    cornerStart,
     apex,
-    exitEnd,
+    cornerEnd,
     direction: shape.direction,
+    sharpness: shape.sharpness,
     apexSpeed: shape.apexSpeed,
     isLong: shape.isLong,
     totalUnits: position,
     finishUnits: position,
     topSpeed: config.straightTopSpeed,
+    brakingPerSec: config.brakingPerSec,
+    tickSec: 1 / config.ticksPerSecond,
   };
 }
 
 /**
- * targetSpeedAt(track, distance, turnIndex) → the track's target speed at `distance`.
- * The top speed on a straight (a car builds toward it at its acceleration rate, so a short
- * straight never gets there); falling linearly from the top speed to the apex speed through
- * the braking zone; rising linearly back to cruise through the exit zone, after which the
- * straight pulls the car on. `turnIndex` is the first turn the car has not left yet (the caller
- * keeps it current), and the next turn is checked too because a very short straight lets two
- * zones touch; the lower target wins.
+ * planSpeed(plan, track, turnIndex, distance, speed, straightTarget, cornerSpeed, isBraking)
+ *   → nothing; fills `plan.desired` (the speed the car wants this tick) and `plan.isBraking`.
+ * In the corner the car wants the corner speed, held. On the straight before it, it wants the
+ * straight's target until it has to brake: when its speed squared exceeds the corner speed
+ * squared plus twice the braking rate times the road left to the corner after this tick's
+ * travel, braking at that rate from here lands it at the corner speed where the bend starts
+ * (v² = u² + 2·a·s, the one kinematic rule; multiplication only, so it rounds the same on every
+ * device; the tick of travel is taken off because the tick moves the car before the next check,
+ * which otherwise arrives a step over). Once braking for a corner the car brakes on to the
+ * corner speed and holds it to the bend, never reopening the throttle, so the slow-down reads as
+ * one braking (Rich, 2026-11-02: slow at the very end of the straight, not in the corner).
+ * After the last corner there is only the straight's target. `plan` is reused, so the hot loop
+ * allocates nothing. `turnIndex` is the first corner the car has not left yet.
  */
-function targetSpeedAt(track, distance, turnIndex) {
-  const topSpeed = track.topSpeed;
-  let target = topSpeed;
-  const last = Math.min(turnIndex + 1, track.turnCount - 1);
-  for (let i = turnIndex; i <= last; i++) {
-    const apexSpeed = track.apexSpeed[i];
-    let turnTarget = topSpeed;
-    if (distance >= track.exitEnd[i] || distance < track.brakeStart[i]) {
-      turnTarget = topSpeed;
-    } else if (distance < track.apex[i]) {
-      const brakeUnits = track.apex[i] - track.brakeStart[i];
-      const brakeFraction = (distance - track.brakeStart[i]) / brakeUnits;
-      turnTarget = topSpeed - (topSpeed - apexSpeed) * brakeFraction;
-    } else {
-      const exitFraction = (distance - track.apex[i]) / (track.exitEnd[i] - track.apex[i]);
-      turnTarget = apexSpeed + (CRUISE_SPEED - apexSpeed) * exitFraction;
-    }
-    if (turnTarget < target) target = turnTarget;
+function planSpeed(
+  plan, track, turnIndex, distance, speed, straightTarget, cornerSpeed, isBraking,
+) {
+  if (turnIndex >= track.turnCount) {
+    plan.desired = straightTarget;
+    plan.isBraking = false;
+    return;
   }
-  return target;
+  const remainingUnits = track.cornerStart[turnIndex] - distance;
+  if (remainingUnits <= 0) {
+    plan.desired = cornerSpeed;
+    plan.isBraking = false;
+    return;
+  }
+  if (isBraking) {
+    plan.desired = cornerSpeed;
+    plan.isBraking = true;
+    return;
+  }
+  const roadAfterTick = remainingUnits - speed * track.tickSec;
+  const speedGap = speed * speed - cornerSpeed * cornerSpeed;
+  if (speedGap > 2 * track.brakingPerSec * roadAfterTick) {
+    plan.desired = cornerSpeed;
+    plan.isBraking = true;
+    return;
+  }
+  plan.desired = straightTarget;
+  plan.isBraking = false;
+}
+
+/**
+ * limitSpeed(speed, desired, accelerationStep, brakingStep) → the speed after one tick: moved
+ * toward `desired` by at most the acceleration step up or the braking step down (track units
+ * per second, the steps already scaled to one tick).
+ */
+function limitSpeed(speed, desired, accelerationStep, brakingStep) {
+  if (desired > speed) return Math.min(desired, speed + accelerationStep);
+  return Math.max(desired, speed - brakingStep);
 }
 
 /**
  * runNominalCar(track, tickLimit, stopDistance, config) → { ticks, distance }.
- * Drives a car with every factor at 1.0 through the track with the race's own speed rules,
- * until it reaches `stopDistance` or `tickLimit` ticks have run. Used to size the straights
- * and to place the finish line, so "the nominal car finishes at the duration" is measured
- * with the same arithmetic the race uses, not estimated with a formula.
+ * Drives a car with every factor at 1.0 through the track with the race's own speed rules
+ * (planSpeed and limitSpeed, the same functions moveCars uses), until it reaches
+ * `stopDistance` or `tickLimit` ticks have run. Used to size the straights and to place the
+ * finish line, so "the nominal car finishes at the duration" is measured with the same
+ * arithmetic the race uses, not estimated with a formula.
  */
 function runNominalCar(track, tickLimit, stopDistance, config) {
   const tickSec = 1 / config.ticksPerSecond;
+  const accelerationStep = config.accelerationPerSec * tickSec;
+  const brakingStep = config.brakingPerSec * tickSec;
+  const plan = { desired: 0, isBraking: false };
   let distance = 0;
   let speed = 0;
   let turnIndex = 0;
+  let isBraking = false;
   let ticks = 0;
   while (ticks < tickLimit && distance < stopDistance) {
-    while (turnIndex < track.turnCount && distance >= track.exitEnd[turnIndex]) turnIndex++;
-    const desired = targetSpeedAt(track, distance, turnIndex);
-    if (desired > speed) {
-      speed = Math.min(desired, speed + config.accelerationPerSec * tickSec);
-    } else {
-      speed = Math.max(desired, speed - config.brakingPerSec * tickSec);
+    while (turnIndex < track.turnCount && distance >= track.cornerEnd[turnIndex]) {
+      turnIndex++;
+      isBraking = false;
     }
+    const cornerSpeed = turnIndex < track.turnCount ? track.apexSpeed[turnIndex] : 0;
+    planSpeed(plan, track, turnIndex, distance, speed, track.topSpeed, cornerSpeed, isBraking);
+    isBraking = plan.isBraking;
+    speed = limitSpeed(speed, plan.desired, accelerationStep, brakingStep);
     distance += speed * tickSec;
     ticks++;
   }
@@ -536,21 +581,25 @@ const CROSSED_ORDER_BASE = 1e9;
 const BASE_PACE = 1;
 
 /**
- * drawCarCheckpoints(seedText, carIndex, track, config) → { distance, factor } (Float64Arrays).
+ * drawCarCheckpoints(seedText, carIndex, track, config)
+ *   → { distance, factor, cornerFactor, tiebreak } (Float64Arrays and a number).
  * A car's speed factors along the road, from its own 'car:<index>' stream: a launch factor at
- * the start line, checkpoints along each straight (within the straight, in distance order) and
- * a corner factor at each turn's braking point. Every car has the same base pace (Rich's
- * decision, 2026-11-01: nothing is fixed before the start); the factor set at a checkpoint
- * holds until the next one, so each car's race comes out of these draws alone. The last draw
- * is the car's tiebreak for a dead heat.
+ * the start line and checkpoints along each straight (within the straight, in distance order),
+ * each scaling the straight's target; and a corner factor per corner, scaling the speed the car
+ * holds through that corner (kept apart from the checkpoints because the braking decision
+ * needs it before the corner is reached). Every car has the same base pace (Rich's decision,
+ * 2026-11-01: nothing is fixed before the start); the factor set at a checkpoint holds until
+ * the next one, so each car's race comes out of these draws alone. The last draw is the car's
+ * tiebreak for a dead heat.
  */
 function drawCarCheckpoints(seedText, carIndex, track, config) {
   const random = createRandom(seedText, `car:${carIndex}`);
   const pace = BASE_PACE;
   const perStraight = Math.max(1, Math.round(config.checkpointsPerStraight));
-  const count = 1 + (track.turnCount + 1) * perStraight + track.turnCount;
+  const count = 1 + (track.turnCount + 1) * perStraight;
   const distance = new Float64Array(count);
   const factor = new Float64Array(count);
+  const cornerFactor = new Float64Array(track.turnCount);
   distance[0] = 0;
   factor[0] = pace * (1 + random.nextBetween(-config.launchSpread, config.launchSpread));
   let next = 1;
@@ -571,12 +620,10 @@ function drawCarCheckpoints(seedText, carIndex, track, config) {
       next++;
     }
     if (i === track.turnCount) break;
-    distance[next] = track.brakeStart[i];
-    factor[next] = pace * (1 + random.nextBetween(-config.cornerSpread, config.cornerSpread));
-    next++;
+    cornerFactor[i] = pace * (1 + random.nextBetween(-config.cornerSpread, config.cornerSpread));
   }
   const tiebreak = random.nextFloat();
-  return { distance, factor, tiebreak };
+  return { distance, factor, cornerFactor, tiebreak };
 }
 
 /**
@@ -638,6 +685,9 @@ export function createRace(options) {
   const checkpointFactor = new Float64Array(checkpointTotal);
   const checkpointStart = new Int32Array(carCount);
   const checkpointEnd = new Int32Array(carCount);
+  // One corner factor per car per corner, flat: car i's factor for corner t is at
+  // i * turnCount + t.
+  const cornerFactor = new Float64Array(carCount * track.turnCount);
   const tiebreak = new Float64Array(carCount);
   let offset = 0;
   for (let i = 0; i < carCount; i++) {
@@ -646,6 +696,7 @@ export function createRace(options) {
     checkpointFactor.set(perCar[i].factor, offset);
     offset += perCar[i].distance.length;
     checkpointEnd[i] = offset;
+    cornerFactor.set(perCar[i].cornerFactor, i * track.turnCount);
     tiebreak[i] = perCar[i].tiebreak;
   }
   const order = new Int32Array(carCount);
@@ -672,7 +723,10 @@ export function createRace(options) {
     checkpointStart,
     checkpointEnd,
     checkpointIndex: Int32Array.from(checkpointStart),
+    cornerFactor,
     turnIndex: new Int32Array(carCount),
+    isBraking: new Uint8Array(carCount),
+    speedPlan: { desired: 0, isBraking: false },
     distance: new Float64Array(carCount),
     previousDistance: new Float64Array(carCount),
     speed: new Float64Array(carCount),
@@ -699,15 +753,17 @@ export function createRace(options) {
 /**
  * moveCars(race) → the number of cars that crossed the finish this tick (their indices are in
  * race.crossingBuffer).
- * One tick for every car: apply any checkpoint reached, keep the turn pointer current, move
- * speed toward the target by at most the acceleration or braking rate, advance. Flat on
- * purpose: this runs 60 times a second for up to 100 cars, so nothing is allocated here.
+ * One tick for every car: apply any checkpoint reached, keep the corner pointer current (a
+ * corner left clears the braking flag), plan the speed the car wants (planSpeed) and move
+ * toward it by at most the acceleration or braking rate (limitSpeed), advance. Flat on purpose:
+ * this runs 60 times a second for up to 100 cars, so nothing is allocated here.
  */
 function moveCars(race) {
-  const { track, tickSec, config } = race;
+  const { track, tickSec, config, speedPlan } = race;
   const accelerationStep = config.accelerationPerSec * tickSec;
   const brakingStep = config.brakingPerSec * tickSec;
   const finishUnits = track.finishUnits;
+  const turnCount = track.turnCount;
   let crossings = 0;
   for (let i = 0; i < race.carCount; i++) {
     const distance = race.distance[i];
@@ -718,15 +774,21 @@ function moveCars(race) {
     }
     race.checkpointIndex[i] = checkpoint;
     let turnIndex = race.turnIndex[i];
-    while (turnIndex < track.turnCount && distance >= track.exitEnd[turnIndex]) turnIndex++;
-    race.turnIndex[i] = turnIndex;
-    const desired = targetSpeedAt(track, distance, turnIndex) * race.factor[i];
-    let speed = race.speed[i];
-    if (desired > speed) {
-      speed = Math.min(desired, speed + accelerationStep);
-    } else {
-      speed = Math.max(desired, speed - brakingStep);
+    let isBraking = race.isBraking[i] === 1;
+    while (turnIndex < turnCount && distance >= track.cornerEnd[turnIndex]) {
+      turnIndex++;
+      isBraking = false;
     }
+    race.turnIndex[i] = turnIndex;
+    const straightTarget = track.topSpeed * race.factor[i];
+    let cornerSpeed = 0;
+    if (turnIndex < turnCount) {
+      cornerSpeed = track.apexSpeed[turnIndex] * race.cornerFactor[i * turnCount + turnIndex];
+    }
+    planSpeed(speedPlan, track, turnIndex, distance, race.speed[i], straightTarget, cornerSpeed,
+      isBraking);
+    race.isBraking[i] = speedPlan.isBraking ? 1 : 0;
+    const speed = limitSpeed(race.speed[i], speedPlan.desired, accelerationStep, brakingStep);
     race.speed[i] = speed;
     race.previousDistance[i] = distance;
     race.distance[i] = distance + speed * tickSec;
@@ -905,19 +967,20 @@ export function raceSnapshot(race, tickFraction) {
 
 /**
  * trackLayout(race) → { turns, straights, finishUnits, totalUnits }.
- * The static track for the stage, in track units: each turn's braking start, apex, exit end,
- * direction (-1 left, 1 right) and apex speed; each straight's start, end and whether it is a
- * long one; the finish line.
+ * The static track for the stage, in track units: each corner's start, apex (midpoint), end,
+ * direction (-1 left, 1 right), sharpness (0 a sweeper, 1 a hairpin) and held speed; each
+ * straight's start, end and whether it is a long one; the finish line.
  */
 export function trackLayout(race) {
   const { track } = race;
   const turns = [];
   for (let i = 0; i < track.turnCount; i++) {
     turns.push({
-      brakeStart: track.brakeStart[i],
+      cornerStart: track.cornerStart[i],
       apex: track.apex[i],
-      exitEnd: track.exitEnd[i],
+      cornerEnd: track.cornerEnd[i],
       direction: track.direction[i],
+      sharpness: track.sharpness[i],
       apexSpeed: track.apexSpeed[i],
     });
   }
@@ -1178,7 +1241,7 @@ const LAST_CAR_LATEST_SHARE = 1.15;
 // proof that the engine's arithmetic is identical across engines; a tuning change moves it, and
 // that is a user-visible change (a new version), so the constant is updated with the version.
 const REFERENCE_SEED = 'P1HUNT';
-const REFERENCE_FINGERPRINT = '54c0c8eb';
+const REFERENCE_FINGERPRINT = 'a9afcb7d';
 
 /**
  * testEntrants(count) → [{ name }], `count` distinct names.
@@ -1354,6 +1417,81 @@ function durationTests(check) {
 }
 
 /**
+ * cornerShapeHolds(track) → true when every corner's held speed and length follow its
+ * sharpness: the speed exactly on the line from apexSpeedMax (sharpness 0) to apexSpeedMin
+ * (sharpness 1), the length within the jitter of the matching line between cornerUnitsMax and
+ * cornerUnitsMin, so a hairpin is slow and short and a sweeper fast and long.
+ */
+function cornerShapeHolds(track) {
+  const [apexMin, apexMax] = orderedRange(CONFIG.apexSpeedMin, CONFIG.apexSpeedMax);
+  const [cornerMin, cornerMax] = orderedRange(CONFIG.cornerUnitsMin, CONFIG.cornerUnitsMax);
+  for (let i = 0; i < track.turnCount; i++) {
+    const sharpness = track.sharpness[i];
+    if (sharpness < 0 || sharpness >= 1) return false;
+    if (track.apexSpeed[i] !== apexMax - (apexMax - apexMin) * sharpness) return false;
+    const baseUnits = cornerMax - (cornerMax - cornerMin) * sharpness;
+    const units = track.cornerEnd[i] - track.cornerStart[i];
+    if (units < baseUnits * (1 - CONFIG.cornerLengthJitter)) return false;
+    if (units > baseUnits * (1 + CONFIG.cornerLengthJitter)) return false;
+  }
+  return true;
+}
+
+/**
+ * cornerProfileHolds(race) → true when the first car's speed through every corner follows the
+ * braking rule: from the tick it starts braking to the corner's start its speed never rises;
+ * it reaches the corner at its corner speed (within one braking step); and inside the corner it
+ * never exceeds that speed. Ticks the race to the end.
+ */
+function cornerProfileHolds(race) {
+  const { track } = race;
+  const brakingStep = race.config.brakingPerSec * race.tickSec;
+  let previousSpeed = 0;
+  let wasBraking = false;
+  let lastTurn = 0;
+  while (!race.isFinished) {
+    advanceTick(race);
+    const distance = race.distance[0];
+    const speed = race.speed[0];
+    const turnIndex = race.turnIndex[0];
+    if (turnIndex >= track.turnCount) break;
+    const cornerSpeed = track.apexSpeed[turnIndex] * race.cornerFactor[turnIndex];
+    const isInCorner = distance >= track.cornerStart[turnIndex];
+    if (turnIndex !== lastTurn) {
+      lastTurn = turnIndex;
+      wasBraking = false;
+    }
+    if (wasBraking && !isInCorner && speed > previousSpeed) return false;
+    if (race.isBraking[0] === 1) wasBraking = true;
+    if (isInCorner && speed > cornerSpeed + brakingStep) return false;
+    previousSpeed = speed;
+  }
+  return true;
+}
+
+/**
+ * cornerTests(check) → nothing. The corners (Rich, 2026-11-02): each corner's held speed and
+ * length follow its sharpness; a car brakes on the straight to the corner speed, holds it
+ * through the corner and never exceeds it there; a sharper corner is slower.
+ */
+function cornerTests(check) {
+  const shapeDetail = [];
+  let isShapeOk = true;
+  let isProfileOk = true;
+  for (const seedText of ['corners', 'K7MX-4QZD', 'sweep-3']) {
+    const race = raceFor(2, seedText, 30);
+    if (!cornerShapeHolds(race.track)) isShapeOk = false;
+    if (!cornerProfileHolds(race)) isProfileOk = false;
+    const speeds = Array.from(race.track.apexSpeed).map(speed => speed.toFixed(2));
+    shapeDetail.push(`${seedText}: ${speeds.join(' ')}`);
+  }
+  check('Corners: each held speed and length follow the corner\'s sharpness, within the ranges',
+    isShapeOk, shapeDetail.join('; '));
+  check('Corners: a car brakes on the straight to the corner speed and holds it through the bend',
+    isProfileOk, 'three seeds, the first car tick by tick');
+}
+
+/**
  * raceTests(check) → nothing. The race's bookkeeping: places are 1..n with ascending times,
  * the live order agrees with the finish, the snapshot interpolates, the layout is consistent,
  * and bad inputs are refused.
@@ -1387,7 +1525,7 @@ function raceTests(check) {
   const longCount = layout.straights.filter(straight => straight.isLong).length;
   check('Track: 2 to 3 turns per 10 s, 1 to 3 long straights, finish past the last turn',
     turnsPerTenSec >= 2 && turnsPerTenSec <= 3 && longCount >= 1 && longCount <= 3
-      && layout.finishUnits > layout.turns[layout.turns.length - 1].exitEnd,
+      && layout.finishUnits > layout.turns[layout.turns.length - 1].cornerEnd,
     `${layout.turns.length} turns, ${longCount} long straights`);
   const refused = [];
   const attempts = [
@@ -1557,8 +1695,8 @@ export function selfTest() {
   const check = (name, pass, detail) => {
     results.push({ name, pass: !!pass, detail: detail === undefined ? '' : String(detail) });
   };
-  const groups = [randomTests, determinismTests, durationTests, raceTests, entrantTests,
-    sanitizerTests];
+  const groups = [randomTests, determinismTests, durationTests, cornerTests, raceTests,
+    entrantTests, sanitizerTests];
   for (const group of groups) {
     try {
       group(check);

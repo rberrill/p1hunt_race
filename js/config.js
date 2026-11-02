@@ -6,7 +6,7 @@
 // what a car at cruise speed covers in one second, so a straight of 3 units is a 3 s straight.
 
 export const CONFIG = {
-  appVersion: '0.1.0-dev.20',
+  appVersion: '0.1.0-dev.21',
   storageKey: 'p1hunt.race.v1',
 
   // Race time (not overridable: it is the definition of race time)
@@ -20,27 +20,32 @@ export const CONFIG = {
   maxNameLength: 40,
   maxSeedLength: 40,
 
-  // Track: turns per 10 s of duration, the straights (a few long ones among short ones), the
-  // apex speed as a fraction of cruise, and the braking and exit zones around each apex. The
-  // apex, zone, rate and spread values are Rich's picks (2026-11-01) from measured presets:
-  // corners visibly slower and the pack visibly stretching, without doubling the tail; the apex
-  // and braking zone softened once the top speed was in ("too aggressive" in the turns)
+  // Track: turns per 10 s of duration, the straights (a few long ones among short ones), and
+  // the corners. Each corner draws a sharpness from 0 (a sweeper) to 1 (a hairpin); its held
+  // speed runs from apexSpeedMax down to apexSpeedMin with it, as a fraction of cruise, and its
+  // length from cornerUnitsMax down to cornerUnitsMin, with a seeded jitter on the length, so a
+  // hairpin is slow and short and a sweeper fast and long (Rich, 2026-11-02: corners differ in
+  // speed by how sharp and long they are; the coupling keeps every corner between about 1.2 and
+  // 1.8 s and is Claude's call). The ranges are starting values, to tune on the stage
   turnsPerTenSecMin: 2,
   turnsPerTenSecMax: 3,
   longStraightsMin: 1,
   longStraightsMax: 3,
   longStraightRatio: 3,
   straightJitter: 0.25,
-  apexSpeedMin: 0.45,
-  apexSpeedMax: 0.65,
-  brakeZoneUnits: 0.6,
-  exitZoneUnits: 0.6,
+  apexSpeedMin: 0.4,
+  apexSpeedMax: 0.75,
+  cornerUnitsMin: 0.5,
+  cornerUnitsMax: 1.3,
+  cornerLengthJitter: 0.15,
 
   // Cars: every car has the same base pace (not a tunable; Rich's decision). A launch factor,
   // speed checkpoints along each straight and a corner factor per turn (each a spread around
   // 1.0) are what set a car apart, and how fast speed can change. On a straight a car builds
-  // from cruise (1.0, the track unit) toward straightTopSpeed at accelerationPerSec and brakes
-  // from it into the next turn (Rich, 2026-11-01: straights read as straights, and fast)
+  // from cruise (1.0, the track unit) toward straightTopSpeed at accelerationPerSec; it brakes
+  // at brakingPerSec on the straight, as late as that rate allows, to reach the corner's speed
+  // where the bend starts, holds it through the bend and builds again from where the road
+  // straightens (Rich, 2026-11-02: slow at the very end of the straight, not in the corner)
   launchSpread: 0.15,
   checkpointsPerStraight: 3,
   checkpointSpread: 0.12,
@@ -85,8 +90,9 @@ export const CONFIG_LIMITS = {
   straightJitter: [0, 0.5],
   apexSpeedMin: [0.2, 0.95],
   apexSpeedMax: [0.2, 0.95],
-  brakeZoneUnits: [0.1, 3],
-  exitZoneUnits: [0.1, 3],
+  cornerUnitsMin: [0.2, 4],
+  cornerUnitsMax: [0.2, 4],
+  cornerLengthJitter: [0, 0.5],
   launchSpread: [0, 0.5],
   checkpointsPerStraight: [1, 8],
   checkpointSpread: [0, 0.3],

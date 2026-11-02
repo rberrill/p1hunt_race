@@ -51,22 +51,32 @@ decision log).
   constant in the same change, and treat the change as user-visible (a version bump), since
   old seeds now give other races.
 - **Track (Rich):** 2 to 3 turns per 10 s of duration; 1 to 3 long straights among short
-  ones (never more than half, Claude's call); each turn a seeded direction and apex speed with
-  fixed braking and exit zones. On a straight a car builds from cruise (1.0, the track unit)
-  toward `straightTopSpeed` at its acceleration rate and brakes from it into the next turn
-  (Rich, 2026-11-01: straights read as straights, and fast). The straights scale so the nominal
+  ones (never more than half, Claude's call); each corner a seeded direction and sharpness, 0 a
+  sweeper to 1 a hairpin, which sets both the speed held through it (`apexSpeedMax` down to
+  `apexSpeedMin`) and its length (`cornerUnitsMax` down to `cornerUnitsMin`, jittered), so a
+  hairpin is slow and short and a sweeper fast and long (Rich, 2026-11-02; the coupling is
+  Claude's call). On a straight a car builds from cruise (1.0, the track unit) toward
+  `straightTopSpeed` at its acceleration rate (Rich, 2026-11-01: straights read as straights,
+  and fast), brakes on the straight as late as `brakingPerSec` allows to reach the corner speed
+  where the bend starts (`planSpeed`: v² = u² + 2·a·s, one tick of travel taken off so the
+  discrete step never arrives over speed; once braking it never reopens the throttle before the
+  corner), holds that speed through the corner and builds again from its end (Rich, 2026-11-02:
+  slow at the very end of the straight, not in the corner). The straights scale so the nominal
   car (every factor 1.0) crosses at the duration to within a tick, the scale found by bisection
   (Claude's call: a formula can't follow the speed profile); the finish line is where that car
-  is at the last tick.
+  is at the last tick. The nominal car runs the same `planSpeed` and `limitSpeed` as the race.
 - **Cars (Rich):** the same base pace for every car, always (`BASE_PACE`, not a tunable); a
   standing start on one line, no grid rows (the stage may draw depth, the engine gives no head
-  start); per car a launch factor, checkpoints along each straight and a corner
-  factor per turn, each a spread around 1.0 from `CONFIG`. Speed moves toward target × factor
-  by at most the acceleration or braking rate per tick.
+  start); per car a launch factor and checkpoints along each straight scaling the straight's
+  target, and a corner factor per corner scaling the speed it holds there (drawn apart from the
+  checkpoints, because the braking decision needs it before the corner), each a spread around
+  1.0 from `CONFIG`. Speed moves toward the planned speed by at most the acceleration or
+  braking rate per tick.
 - **Finish (Rich):** every car crosses; the crossing time is the tick plus a linear sub-tick
   fraction; a dead heat goes to the car's seeded tiebreak, then list order. `maxRaceSec` is
   only a guard. Times are kept to the millisecond.
 - **Hot loop:** `moveCars` allocates nothing; the state is typed arrays; `raceSnapshot` refills
-  one object per race. Measured: about 4 µs per tick with 100 cars in Node.
+  one object per race (`speedPlan` is the one scratch object `planSpeed` fills). Measured: about
+  2.3 µs per tick with 100 cars in Node (2026-11-02).
 - **Overrides:** `sanitizeOverrides` applies only `CONFIG_LIMITS` keys, numbers within range;
   the applied set is carried in the race record and both exports.

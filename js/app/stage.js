@@ -124,9 +124,12 @@ const KERB_UNITS = 0.25;
 const DASH_UNITS = 0.5;
 const KERB_WIDTH_FRACTION = 0.07;
 const DASH_WIDTH_FRACTION = 0.02;
-// How far a turn's bend starts before the braking zone (the turn is seen before it is braked
-// for) and how strongly the road's centre moves per unit of curvature. Look only.
-const BEND_LEAD_UNITS = 1.0;
+// The bend is drawn over the corner alone (the braking happens on straight road before it;
+// Rich, 2026-11-02) and peaks at the apex with a strength from a sweeper's to a hairpin's by
+// the corner's sharpness; BEND_GAIN is how strongly the road's centre moves per unit of
+// curvature. Look only.
+const BEND_STRENGTH_SWEEPER = 0.55;
+const BEND_STRENGTH_HAIRPIN = 1.9;
 const BEND_GAIN = 0.9;
 // A car's width at the bottom edge as a share of the road's full width there, and its height
 // as a share of its width (a rear view is wider than it is tall).
@@ -295,20 +298,24 @@ function updateCamera(snapshot, frameDeltaSec) {
 }
 
 /**
- * curvatureAt(trackUnits) → the road's bend at a distance, -1 (left) to 1 (right), zero on the
- * straights and peaking at each turn's apex; sharper for a slower apex.
+ * curvatureAt(trackUnits) → the road's bend at a distance, negative left and positive right,
+ * zero on the straights, rising from the corner's start to its apex and falling back to zero at
+ * its end, so the road straightens exactly where the cars open the throttle; a hairpin bends
+ * harder than a sweeper by its sharpness.
  */
 function curvatureAt(trackUnits) {
   const { turns } = scene.layout;
   for (let i = 0; i < turns.length; i++) {
     const turn = turns[i];
-    const bendStart = turn.brakeStart - BEND_LEAD_UNITS;
-    if (trackUnits < bendStart || trackUnits > turn.exitEnd) continue;
-    const strength = 1 - turn.apexSpeed;
+    if (trackUnits < turn.cornerStart || trackUnits > turn.cornerEnd) continue;
+    const strength = BEND_STRENGTH_SWEEPER
+      + (BEND_STRENGTH_HAIRPIN - BEND_STRENGTH_SWEEPER) * turn.sharpness;
     if (trackUnits < turn.apex) {
-      return turn.direction * strength * (trackUnits - bendStart) / (turn.apex - bendStart);
+      return turn.direction * strength * (trackUnits - turn.cornerStart)
+        / (turn.apex - turn.cornerStart);
     }
-    return turn.direction * strength * (turn.exitEnd - trackUnits) / (turn.exitEnd - turn.apex);
+    return turn.direction * strength * (turn.cornerEnd - trackUnits)
+      / (turn.cornerEnd - turn.apex);
   }
   return 0;
 }
