@@ -69,7 +69,8 @@ paths:
   swatch is the color alone), the shade bands mixed once per race in `setScene`, labels on cars
   drawn directly over the car, never lifted, wide enough and always on the top three, the rest where the
   label is free, an established label keeping its spot and a new one waiting `labelShowDelayMs`
-  for a clear one (`drawLabels`), the finish band, the start lights, `drawStill` for reduced motion.
+  for a clear one (`drawLabels`; the top three boxed with a colour edge, the pack haloed text,
+  `drawLabel`), the finish band, the start lights, `drawStill` for reduced motion.
 - `js/app/winner.js`: the Winner phase. The hero sized to the name, the finish order (phone:
   eight, then Show all), CSV / JSON export named `p1hunt-race-<seed>-<yyyymmdd-hhmm>`, Copy result
   only where the clipboard exists, Re-run and Start over.

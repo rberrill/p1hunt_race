@@ -24,8 +24,13 @@ const COLOR_CAR_DARK = '#232327';
 const COLOR_HELMET = '#e8e8ea';
 const COLOR_MIX_WHITE = '#ffffff';
 const COLOR_MIX_BLACK = '#000000';
-const COLOR_LABEL_BG = 'rgba(22, 22, 24, 0.82)';
+// The top three sit in a translucent box edged in the car's colour; the pack is haloed text
+// with no box, so the cars behind show through (Rich, 2026-11-02, from six mockups in
+// archive/label-options.html, Claude's pick: a box survives stream compression for the
+// names that matter, the pack recedes).
+const COLOR_LABEL_BG = 'rgba(22, 22, 24, 0.55)';
 const COLOR_LABEL_TEXT = '#e8e8ea';
+const COLOR_LABEL_HALO = 'rgba(10, 10, 12, 0.9)';
 const COLOR_LIGHT_ON = '#e5322d';
 const COLOR_LIGHT_OFF = '#3a3a40';
 // Twelve flat car colors by list index; no mapping onto any real livery (Claude's call).
@@ -150,6 +155,10 @@ const LABEL_FONT_FRACTION = 0.34;
 const LABEL_FONT_MIN_PX = 10;
 const LABEL_FONT_MAX_PX = 16;
 const LABEL_PADDING_PX = 3;
+const LABEL_EDGE_PX = 3;
+// The halo's stroke as a fraction of the font size, at least LABEL_HALO_MIN_PX wide.
+const LABEL_HALO_FRACTION = 0.28;
+const LABEL_HALO_MIN_PX = 3;
 // The top three of the live order are always labelled (Rich, 2026-11-01), at this font at
 // least. A label sits directly over its car and is never lifted into a stack (Rich,
 // 2026-11-02; the first cut lifted a top-three label that would cover another).
@@ -897,25 +906,41 @@ function labelFontPx(widthPx, isTop) {
 }
 
 /**
- * drawLabel(x, y, widthPx, text, fontPx) → a name on a dark pill directly above the car at
- * (x, y) drawn widthPx wide.
+ * drawLabel(i) → candidate i's name at the box last measured, directly above its car: the
+ * top three on a translucent box edged in the car's colour, the pack as haloed text alone.
  */
-function drawLabel(x, y, widthPx, text, fontPx) {
+function drawLabel(i) {
   const { ctx } = view;
-  ctx.font = `600 ${fontPx}px system-ui, sans-serif`;
+  const car = labels.car[i];
+  const text = scene.displayNames[car];
+  const { fontPx } = labelBox;
+  ctx.font = labelFont(fontPx, labels.isTop[i] === 1);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'bottom';
-  const textWidth = ctx.measureText(text).width;
-  const top = y - widthPx * CAR_HEIGHT_RATIO - fontPx - LABEL_PADDING_PX * 2;
-  ctx.fillStyle = COLOR_LABEL_BG;
-  ctx.fillRect(
-    x - textWidth / 2 - LABEL_PADDING_PX,
-    top,
-    textWidth + LABEL_PADDING_PX * 2,
-    fontPx + LABEL_PADDING_PX * 2,
-  );
+  const baseline = labelBox.bottom - LABEL_PADDING_PX;
+  if (labels.isTop[i] === 1) {
+    ctx.fillStyle = COLOR_LABEL_BG;
+    ctx.fillRect(labelBox.left, labelBox.top, labelBox.right - labelBox.left,
+      labelBox.bottom - labelBox.top);
+    ctx.fillStyle = scene.colors[car];
+    ctx.fillRect(labelBox.left, labelBox.top, LABEL_EDGE_PX, labelBox.bottom - labelBox.top);
+    ctx.fillStyle = COLOR_LABEL_TEXT;
+    ctx.fillText(text, labels.x[i] + LABEL_EDGE_PX / 2, baseline);
+    return;
+  }
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = Math.max(LABEL_HALO_MIN_PX, fontPx * LABEL_HALO_FRACTION);
+  ctx.strokeStyle = COLOR_LABEL_HALO;
+  ctx.strokeText(text, labels.x[i], baseline);
   ctx.fillStyle = COLOR_LABEL_TEXT;
-  ctx.fillText(text, x, top + fontPx + LABEL_PADDING_PX);
+  ctx.fillText(text, labels.x[i], baseline);
+}
+
+/**
+ * labelFont(fontPx, isTop) → the canvas font for a label: the pack's haloed text is bolder.
+ */
+function labelFont(fontPx, isTop) {
+  return `${isTop ? 600 : 700} ${fontPx}px system-ui, sans-serif`;
 }
 
 /**
@@ -1016,9 +1041,10 @@ function hideLabel(car) {
 function measureLabel(i, isForced) {
   const { ctx } = view;
   const fontPx = labelFontPx(labels.widthPx[i], isForced);
-  ctx.font = `600 ${fontPx}px system-ui, sans-serif`;
+  ctx.font = labelFont(fontPx, isForced);
   const text = scene.displayNames[labels.car[i]];
-  const halfWidth = ctx.measureText(text).width / 2 + LABEL_PADDING_PX;
+  const edgePx = isForced ? LABEL_EDGE_PX : 0;
+  const halfWidth = (ctx.measureText(text).width + edgePx) / 2 + LABEL_PADDING_PX;
   const heightPx = fontPx + LABEL_PADDING_PX * 2;
   labelBox.fontPx = fontPx;
   labelBox.left = labels.x[i] - halfWidth;
@@ -1032,8 +1058,7 @@ function measureLabel(i, isForced) {
  * measured and recording that box at index `accepted`.
  */
 function acceptLabel(i, accepted) {
-  const text = scene.displayNames[labels.car[i]];
-  drawLabel(labels.x[i], labels.y[i], labels.widthPx[i], text, labelBox.fontPx);
+  drawLabel(i);
   labels.left[accepted] = labelBox.left;
   labels.right[accepted] = labelBox.right;
   labels.top[accepted] = labelBox.top;
