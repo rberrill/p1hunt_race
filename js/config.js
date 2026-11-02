@@ -6,7 +6,7 @@
 // what a car at cruise speed covers in one second, so a straight of 3 units is a 3 s straight.
 
 export const CONFIG = {
-  appVersion: '0.1.0-dev.35',
+  appVersion: '0.1.0-dev.36',
   storageKey: 'p1hunt.race.v1',
 
   // Race time (not overridable: it is the definition of race time)
@@ -100,6 +100,10 @@ export const CONFIG = {
   boardCount: 3,
   boardUnits: 1,
   labelMinWidthPx: 28,
+  // A pack label is drawn only once its spot has been clear this long, and then holds the
+  // spot against newer names (Rich, 2026-11-02: the names popped in and out too fast to
+  // read). Look only
+  labelShowDelayMs: 300,
   // The timing tower's rows flow to the bottom of the stage and "+ n more" is the last line
   // only when they run out of room (Rich, 2026-11-01); this cap is a link-only extra, off at
   // the field's maximum
@@ -147,6 +151,7 @@ export const CONFIG_LIMITS = {
   boardCount: [0, 6],
   boardUnits: [0.2, 5],
   labelMinWidthPx: [0, 200],
+  labelShowDelayMs: [0, 3000],
   towerMaxRows: [3, 100],
   towerRefreshMs: [100, 5000],
   reducedMotion: [0, 1],

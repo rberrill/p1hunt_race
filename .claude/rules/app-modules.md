@@ -33,7 +33,7 @@ paths:
   link-overridable keys with their ranges). The shell's tunables (`startCountdownSec`,
   `finishHoldMs`, `revealSec`, `maxFrameGapMs`, the camera's units, the road texture
   (`kerbUnits`, `dashUnits`) and the braking boards (`boardCount`, `boardUnits`),
-  `labelMinWidthPx`, `reducedMotion`, `saveDebounceMs`) sit after the engine's.
+  `labelMinWidthPx`, `labelShowDelayMs`, `reducedMotion`, `saveDebounceMs`) sit after the engine's.
 - `js/app/main.js`: the entry. Link settings through `sanitizeOverrides`; the saved session and
   the Resume card; the phase loop (Start race → the race → the record saved → the Winner screen →
   Re-run or Start over); `?selftest=1`; `window.__race`.
@@ -68,7 +68,8 @@ paths:
   2026-11-02 mockup) in a color by index with an accent per dozen (`CAR_ACCENTS`; the tower's
   swatch is the color alone), the shade bands mixed once per race in `setScene`, labels on cars
   drawn directly over the car, never lifted, wide enough and always on the top three, the rest where the
-  label is free, the finish band, the start lights, `drawStill` for reduced motion.
+  label is free, an established label keeping its spot and a new one waiting `labelShowDelayMs`
+  for a clear one (`drawLabels`), the finish band, the start lights, `drawStill` for reduced motion.
 - `js/app/winner.js`: the Winner phase. The hero sized to the name, the finish order (phone:
   eight, then Show all), CSV / JSON export named `p1hunt-race-<seed>-<yyyymmdd-hhmm>`, Copy result
   only where the clipboard exists, Re-run and Start over.

@@ -213,6 +213,16 @@ const labels = {
   top: new Float64Array(MAX_CARS),
   bottom: new Float64Array(MAX_CARS),
 };
+// Per car, the frame time its label was first shown and the frame time its spot was first
+// found clear, -1 for neither: a shown label holds its spot against newer names, and a new
+// one waits labelShowDelayMs for a clear spot (Rich, 2026-11-02: the pack's names popped in
+// and out too fast to read). `shownOrder` is scratch for the shown candidates, oldest first.
+const labelShownSinceMs = new Float64Array(MAX_CARS).fill(-1);
+const labelFreeSinceMs = new Float64Array(MAX_CARS).fill(-1);
+const labelIsCandidate = new Uint8Array(MAX_CARS);
+const shownOrder = new Int32Array(MAX_CARS);
+// The box of the label measured last, by measureLabel.
+const labelBox = { left: 0, right: 0, top: 0, bottom: 0, fontPx: 0 };
 
 /**
  * initStage(canvas) → takes the canvas and its drawing context.
@@ -256,6 +266,8 @@ export function setScene(layout, displayNames, config) {
   camera.units = -config.lookBackUnits;
   camera.targetUnits = camera.units;
   camera.isParked = false;
+  labelShownSinceMs.fill(-1);
+  labelFreeSinceMs.fill(-1);
 }
 
 /**
@@ -907,46 +919,125 @@ function drawLabel(x, y, widthPx, text, fontPx) {
 }
 
 /**
- * drawLabels() → places this frame's label candidates, each directly over its car and never
- * lifted into a stack (Rich, 2026-11-02): the top three of the live order first, always drawn,
- * walked from third to first so that where two of them overlap the car ahead is painted last
- * and stays whole; then the rest nearest car first, dropping any that would overlap a label
- * already placed, so a bunched pack never reads as a pile of text. The candidates arrive far to
- * near, which for the top three is race order. The accepted boxes are kept in the same arrays,
- * compacted from the front.
+ * drawLabels(frameTimeMs) → places this frame's label candidates, each directly over its car
+ * and never lifted into a stack (Rich, 2026-11-02): the top three of the live order first,
+ * always drawn, walked from third to first so that where two of them overlap the car ahead is
+ * painted last and stays whole; then the labels already shown, oldest first, each kept while
+ * its spot is clear, so an established name yields only to a top-three name or an older one;
+ * then the newcomers nearest car first, each drawn once its spot has been clear for
+ * labelShowDelayMs (Rich, 2026-11-02: names that popped in and out could not be read). A
+ * bunched pack never reads as a pile of text. The candidates arrive far to near, which for the
+ * top three is race order. The accepted boxes are kept in the same arrays, compacted from the
+ * front. A car with no candidate this frame (off the stage, too small, or the names held)
+ * starts over.
  */
-function drawLabels() {
+function drawLabels(frameTimeMs) {
   let accepted = 0;
+  labelIsCandidate.fill(0, 0, scene.carCount);
   for (let i = labels.count - 1; i >= 0; i--) {
-    if (labels.isTop[i]) accepted = placeLabel(i, accepted, true);
+    if (!labels.isTop[i]) continue;
+    const car = labels.car[i];
+    labelIsCandidate[car] = 1;
+    if (labelShownSinceMs[car] < 0) labelShownSinceMs[car] = frameTimeMs;
+    measureLabel(i, true);
+    accepted = acceptLabel(i, accepted);
   }
+  const shownCount = collectShown();
+  for (let shown = 0; shown < shownCount; shown++) {
+    const i = shownOrder[shown];
+    measureLabel(i, false);
+    if (isBoxFree(labelBox.left, labelBox.right, labelBox.top, labelBox.bottom, accepted)) {
+      accepted = acceptLabel(i, accepted);
+    } else {
+      hideLabel(labels.car[i]);
+    }
+  }
+  const delayMs = scene.config.labelShowDelayMs;
   for (let i = labels.count - 1; i >= 0; i--) {
-    if (!labels.isTop[i]) accepted = placeLabel(i, accepted, false);
+    const car = labels.car[i];
+    if (labels.isTop[i] || labelShownSinceMs[car] >= 0) continue;
+    measureLabel(i, false);
+    if (!isBoxFree(labelBox.left, labelBox.right, labelBox.top, labelBox.bottom, accepted)) {
+      labelFreeSinceMs[car] = -1;
+      continue;
+    }
+    if (labelFreeSinceMs[car] < 0) labelFreeSinceMs[car] = frameTimeMs;
+    if (frameTimeMs - labelFreeSinceMs[car] < delayMs) continue;
+    labelShownSinceMs[car] = frameTimeMs;
+    accepted = acceptLabel(i, accepted);
+  }
+  for (let car = 0; car < scene.carCount; car++) {
+    if (!labelIsCandidate[car]) hideLabel(car);
   }
   labels.count = 0;
 }
 
 /**
- * placeLabel(i, accepted, isForced) → the accepted count after candidate i. Measures its box
- * at rest over the car; a forced label is always drawn, an ordinary one is dropped when it
- * overlaps a box already accepted. An accepted box is recorded at index `accepted`.
+ * collectShown() → how many of this frame's pack candidates already carry a label, their
+ * indices put in `shownOrder` oldest first; every pack candidate is marked as one.
  */
-function placeLabel(i, accepted, isForced) {
+function collectShown() {
+  let count = 0;
+  for (let i = 0; i < labels.count; i++) {
+    const car = labels.car[i];
+    if (labels.isTop[i]) continue;
+    labelIsCandidate[car] = 1;
+    if (labelShownSinceMs[car] < 0) continue;
+    let slot = count;
+    while (slot > 0 && shownSinceOf(shownOrder[slot - 1]) > labelShownSinceMs[car]) {
+      shownOrder[slot] = shownOrder[slot - 1];
+      slot--;
+    }
+    shownOrder[slot] = i;
+    count++;
+  }
+  return count;
+}
+
+/**
+ * shownSinceOf(i) → when candidate i's car was first shown with a label.
+ */
+function shownSinceOf(i) {
+  return labelShownSinceMs[labels.car[i]];
+}
+
+/**
+ * hideLabel(car) → the car's label is no longer shown and its spot no longer counted clear.
+ */
+function hideLabel(car) {
+  labelShownSinceMs[car] = -1;
+  labelFreeSinceMs[car] = -1;
+}
+
+/**
+ * measureLabel(i, isForced) → candidate i's box at rest over its car, into `labelBox`, with
+ * the canvas font set for it.
+ */
+function measureLabel(i, isForced) {
   const { ctx } = view;
   const fontPx = labelFontPx(labels.widthPx[i], isForced);
   ctx.font = `600 ${fontPx}px system-ui, sans-serif`;
   const text = scene.displayNames[labels.car[i]];
   const halfWidth = ctx.measureText(text).width / 2 + LABEL_PADDING_PX;
   const heightPx = fontPx + LABEL_PADDING_PX * 2;
-  const left = labels.x[i] - halfWidth;
-  const right = labels.x[i] + halfWidth;
-  const bottom = labels.y[i] - labels.widthPx[i] * CAR_HEIGHT_RATIO;
-  if (!isForced && !isBoxFree(left, right, bottom - heightPx, bottom, accepted)) return accepted;
-  drawLabel(labels.x[i], labels.y[i], labels.widthPx[i], text, fontPx);
-  labels.left[accepted] = left;
-  labels.right[accepted] = right;
-  labels.top[accepted] = bottom - heightPx;
-  labels.bottom[accepted] = bottom;
+  labelBox.fontPx = fontPx;
+  labelBox.left = labels.x[i] - halfWidth;
+  labelBox.right = labels.x[i] + halfWidth;
+  labelBox.bottom = labels.y[i] - labels.widthPx[i] * CAR_HEIGHT_RATIO;
+  labelBox.top = labelBox.bottom - heightPx;
+}
+
+/**
+ * acceptLabel(i, accepted) → the accepted count after drawing candidate i at the box last
+ * measured and recording that box at index `accepted`.
+ */
+function acceptLabel(i, accepted) {
+  const text = scene.displayNames[labels.car[i]];
+  drawLabel(labels.x[i], labels.y[i], labels.widthPx[i], text, labelBox.fontPx);
+  labels.left[accepted] = labelBox.left;
+  labels.right[accepted] = labelBox.right;
+  labels.top[accepted] = labelBox.top;
+  labels.bottom[accepted] = labelBox.bottom;
   return accepted + 1;
 }
 
@@ -965,11 +1056,11 @@ function isBoxFree(left, right, top, bottom, accepted) {
 }
 
 /**
- * drawCars(snapshot, isLabelled) → every car in view, far to near so the near ones overlap,
- * each at its lane across the road; when `isLabelled`, labels on the cars drawn at least
- * labelMinWidthPx wide and always on the top three of the live order (Rich, 2026-11-01).
+ * drawCars(snapshot, isLabelled, frameTimeMs) → every car in view, far to near so the near ones
+ * overlap, each at its lane across the road; when `isLabelled`, labels on the cars drawn at
+ * least labelMinWidthPx wide and always on the top three of the live order (Rich, 2026-11-01).
  */
-function drawCars(snapshot, isLabelled) {
+function drawCars(snapshot, isLabelled, frameTimeMs) {
   const near = scene.config.cameraNearUnits;
   const far = scene.config.viewDepthUnits;
   const carWidthNear = roadHalfWidthNearPx() * 2 * CAR_WIDTH_FRACTION;
@@ -995,7 +1086,7 @@ function drawCars(snapshot, isLabelled) {
       labels.count++;
     }
   }
-  drawLabels();
+  drawLabels(frameTimeMs);
 }
 
 /* ==== LIGHTS ==== */
@@ -1052,9 +1143,10 @@ export function carColor(car) {
 }
 
 /**
- * drawFrame(snapshot, options) → one frame: { frameDeltaSec, lightsLit, isLabelled } where
- * lightsLit is -1 for no lights, else how many of the three are red, and isLabelled says
- * whether the cars carry their names (held back with the tower after the start).
+ * drawFrame(snapshot, options) → one frame: { frameDeltaSec, frameTimeMs, lightsLit,
+ * isLabelled } where lightsLit is -1 for no lights, else how many of the three are red,
+ * isLabelled says whether the cars carry their names (held back with the tower after the
+ * start), and frameTimeMs paces the labels' show delay.
  */
 export function drawFrame(snapshot, options) {
   const { ctx } = view;
@@ -1065,7 +1157,7 @@ export function drawFrame(snapshot, options) {
   drawRoad();
   drawBoards();
   drawFinishLine();
-  drawCars(snapshot, options.isLabelled);
+  drawCars(snapshot, options.isLabelled, options.frameTimeMs);
   if (options.lightsLit >= 0) drawLights(options.lightsLit);
 }
 

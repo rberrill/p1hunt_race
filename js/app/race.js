@@ -11,7 +11,7 @@ import {
   raceSnapshot,
   trackLayout,
   finishResult,
-} from '../engine.js?v=0.1.0-dev.35';
+} from '../engine.js?v=0.1.0-dev.36';
 import {
   app,
   byId,
@@ -21,7 +21,7 @@ import {
   announce,
   formatRaceTime,
   phoneMedia,
-} from './core.js?v=0.1.0-dev.35';
+} from './core.js?v=0.1.0-dev.36';
 import {
   initStage,
   resizeStage,
@@ -29,7 +29,7 @@ import {
   drawFrame,
   drawStill,
   carColor,
-} from './stage.js?v=0.1.0-dev.35';
+} from './stage.js?v=0.1.0-dev.36';
 
 // The timing tower and the HUD text are rewritten at most this often (frame time).
 const PANEL_INTERVAL_MS = 100;
@@ -311,6 +311,7 @@ function drawCurrentFrame(frameTimeMs, tickFraction = 0, clockMs = raceClockMs(f
   const isHeld = clockMs < app.config.towerRefreshMs;
   drawFrame(snapshot, {
     frameDeltaSec,
+    frameTimeMs,
     lightsLit: lightsLit(clockMs),
     isLabelled: !isHeld,
   });
